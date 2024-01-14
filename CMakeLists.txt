@@ -4,7 +4,7 @@ project(WilloRHI VERSION 0.1)
 set(CMAKE_CXX_STANDARD 20)
 
 file(GLOB_RECURSE RHI_SOURCE src/*.cpp)
-file(GLOB_RECURSE RHI_INCLUDE include/include/WilloRHI/*.hpp)
+file(GLOB_RECURSE RHI_INCLUDE include/WilloRHI/*.hpp)
 
 add_library(WilloRHI ${RHI_SOURCE} ${RHI_INCLUDE})
 
