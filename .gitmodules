@@ -1,3 +1,6 @@
 [submodule "ext/concurrentqueue"]
 	path = ext/concurrentqueue
-	url = https://github.com/cameron314/concurrentqueue
+	url = https://github.com/cameron314/concurrentqueue.git
+[submodule "ext/VulkanMemoryAllocator"]
+	path = ext/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
