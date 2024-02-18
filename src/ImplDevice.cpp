@@ -84,6 +84,9 @@ namespace WilloRHI
         }
 
         impl->LogMessage("Initialised Device", false);
+        
+        if (createInfo.validationLayers)
+            impl->LogMessage("Validation layers are enabled", false);
 
         return newDevice;
     }
@@ -91,14 +94,18 @@ namespace WilloRHI
     void ImplDevice::SetupQueues(vkb::Device vkbDevice)
     {
         LogMessage("Getting device queues", false);
+
         _graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
         _graphicsQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+        LogMessage("Initialised graphics queue with index " + std::to_string(_graphicsQueueIndex), false);
 
         _computeQueue = vkbDevice.get_queue(vkb::QueueType::compute).value();
         _computeQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
+        LogMessage("Initialised compute queue with index " + std::to_string(_computeQueueIndex), false);
 
         _transferQueue = vkbDevice.get_queue(vkb::QueueType::transfer).value();
         _transferQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
+        LogMessage("Initialised transfer queue with index " + std::to_string(_transferQueueIndex), false);
 
         LogMessage("Initialised device queues", false);
     }
@@ -110,7 +117,11 @@ namespace WilloRHI
         _resources.imageViews = ResourceMap<ImageViewResource>(countInfo.imageViewCount);
         _resources.samplers = ResourceMap<SamplerResource>(countInfo.samplerCount);
     
-        LogMessage("Initialised resource descriptorsets", false);
+        LogMessage("Initialised resource sets with the following counts:\n - "
+            + std::to_string(countInfo.bufferCount) + " Buffers\n - "
+            + std::to_string(countInfo.imageCount) + " Images\n - "
+            + std::to_string(countInfo.imageViewCount) + " ImageViews\n - "
+            + std::to_string(countInfo.samplerCount) + " Samplers", false);
     }
 
     void ImplDevice::SetupDefaultResources()
@@ -250,6 +261,8 @@ namespace WilloRHI
             _commandListPool.commandPools.insert({ threadId, newPool });
 
             _commandListPool.primaryBuffers.insert({ threadId, moodycamel::ConcurrentQueue<CommandList>()});
+        
+            LogMessage("Created new CommandPool for thread " + std::to_string(std::hash<std::thread::id>()(threadId)), false);
         }
 
         CommandList commandList;
@@ -268,6 +281,9 @@ namespace WilloRHI
         
             commandList.impl->_device = this;
             commandList.impl->_threadId = std::this_thread::get_id();
+
+            LogMessage("Allocated CommandList for thread " + std::to_string(std::hash<std::thread::id>()(threadId))
+                + " on frame " + std::to_string(_frameNum % _maxFramesInFlight), false);
         }
 
         return commandList;
