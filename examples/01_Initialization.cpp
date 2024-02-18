@@ -19,22 +19,22 @@ int main()
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Test Window", nullptr, nullptr);
 
     HWND hwnd = glfwGetWin32Window(window);
-    glfwSwapInterval(0);
+    glfwSwapInterval(1);
 
-    WilloRHI::ResourceCountInfo countInfo = {};
-    countInfo.bufferCount = 8;
-    countInfo.imageCount = 8;
-    countInfo.imageViewCount = 8;
-    countInfo.samplerCount = 8;
+    WilloRHI::ResourceCountInfo countInfo = {
+        .bufferCount = 0,
+        .imageCount = 6,
+        .imageViewCount = 0,
+        .samplerCount = 0
+    };
 
     WilloRHI::DeviceCreateInfo deviceInfo = {
         .applicationName = "01_Initialization",
-        .validationLayers = false,
+        .validationLayers = true,
         .logCallback = &OutputMessage,
         .logInfo = true,
         .resourceCounts = countInfo,
@@ -64,6 +64,21 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+
+        // this is far from optimal resizing, should read up on smooth resize
+        // maybe give Swapchain its own Resize() function
+        int newWidth, newHeight;
+        glfwGetWindowSize(window, &newWidth, &newHeight);
+        if (newWidth != swapchainInfo.width || newHeight != swapchainInfo.height) {
+            device.WaitIdle();
+            device.DestroySwapchain(swapchain);
+            device.CollectGarbage();
+
+            swapchainInfo.width = newWidth;
+            swapchainInfo.height = newHeight;
+
+            swapchain = device.CreateSwapchain(swapchainInfo);
+        }
 
         device.WaitSemaphore(gpuTimeline, device.GetFrameNum(), 1000000000);
         device.NextFrame();

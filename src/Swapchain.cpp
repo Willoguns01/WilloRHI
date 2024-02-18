@@ -16,4 +16,8 @@ namespace WilloRHI
     BinarySemaphore const& Swapchain::GetAcquireSemaphore() {
         return impl->GetAcquireSemaphore();
     }
+
+    bool Swapchain::ResizeRequested() const {
+        return impl->ResizeRequested();
+    }
 }

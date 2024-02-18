@@ -14,6 +14,8 @@ namespace WilloRHI
 
         BinarySemaphore const& GetAcquireSemaphore();
 
+        bool ResizeRequested() const;
+
     protected:
         friend ImplDevice;
 

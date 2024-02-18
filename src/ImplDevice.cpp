@@ -94,27 +94,11 @@ namespace WilloRHI
         _graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
         _graphicsQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
-        auto queue_ret = vkbDevice.get_dedicated_queue(vkb::QueueType::compute);
-        if (!queue_ret) {
-            _computeQueue = _graphicsQueue;
-            _computeQueueIndex = _graphicsQueueIndex;
-            LogMessage("No dedicated compute queue found, setting to graphics queue");
-        }
-        else {
-            _computeQueue = queue_ret.value();
-            _computeQueueIndex = vkbDevice.get_dedicated_queue_index(vkb::QueueType::compute).value();
-        }
+        _computeQueue = vkbDevice.get_queue(vkb::QueueType::compute).value();
+        _computeQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
 
-        queue_ret = vkbDevice.get_dedicated_queue(vkb::QueueType::transfer);
-        if (!queue_ret) {
-            _transferQueue = _graphicsQueue;
-            _transferQueueIndex = _graphicsQueueIndex;
-            LogMessage("No dedicated transfer queue found, setting to graphics queue");
-        }
-        else {
-            _transferQueue = queue_ret.value();
-            _transferQueueIndex = vkbDevice.get_dedicated_queue_index(vkb::QueueType::transfer).value();
-        }
+        _transferQueue = vkbDevice.get_queue(vkb::QueueType::transfer).value();
+        _transferQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
 
         LogMessage("Initialised device queues", false);
     }
@@ -167,10 +151,11 @@ namespace WilloRHI
         newSemaphore.impl = std::make_shared<ImplBinarySemaphore>();
         ImplBinarySemaphore* impl = newSemaphore.impl.get();
 
-        VkSemaphoreCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        createInfo.pNext = nullptr;
-        createInfo.flags = 0;
+        VkSemaphoreCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0
+        };
 
         ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &impl->vkSemaphore));
         LogMessage("Created binary semaphore", false);
@@ -183,16 +168,18 @@ namespace WilloRHI
         newSemaphore.impl = std::make_shared<ImplTimelineSemaphore>();
         ImplTimelineSemaphore* impl = newSemaphore.impl.get();
 
-        VkSemaphoreTypeCreateInfo typeInfo = {};
-        typeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-        typeInfo.pNext = nullptr;
-        typeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-        typeInfo.initialValue = initialValue;
+        VkSemaphoreTypeCreateInfo typeInfo = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+            .pNext = nullptr,
+            .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+            .initialValue = initialValue
+        };
 
-        VkSemaphoreCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        createInfo.pNext = &typeInfo;
-        createInfo.flags = 0;
+        VkSemaphoreCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = &typeInfo,
+            .flags = 0
+        };
 
         ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &impl->vkSemaphore));
         LogMessage("Created timeline semaphore", false);
@@ -205,7 +192,7 @@ namespace WilloRHI
         Swapchain newSwapchain;
         ImplSwapchain* swapImpl = newSwapchain.impl.get();
 
-        swapImpl->device = parent;
+        swapImpl->device = this;
         swapImpl->vkDevice = _vkDevice;
 
         VkSurfaceKHR vkSurface = CreateSurface(createInfo.windowHandle);
@@ -319,19 +306,15 @@ namespace WilloRHI
 
     void ImplDevice::WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout)
     {
-        VkSemaphoreWaitInfo waitInfo = {};
-        waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
-        waitInfo.pNext = nullptr;
-        waitInfo.semaphoreCount = 1;
-        waitInfo.pSemaphores = &semaphore.impl->vkSemaphore;
-        waitInfo.pValues = &value;
+        VkSemaphoreWaitInfo waitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+            .pNext = nullptr,
+            .semaphoreCount = 1,
+            .pSemaphores = &semaphore.impl->vkSemaphore,
+            .pValues = &value
+        };
 
-        VkResult result = vkWaitSemaphores(_vkDevice, &waitInfo, timeout);
-        if (result == VK_TIMEOUT) {
-            LogMessage("Timed-out waiting for value on TimelineSemaphore");
-        } else if (result != VK_SUCCESS) {
-            LogMessage("Encountered Vulkan error waiting for value on TimelineSemaphore");
-        }
+        ErrorCheck(vkWaitSemaphores(_vkDevice, &waitInfo, timeout));
     }
 
     uint64_t ImplDevice::GetSemaphoreValue(TimelineSemaphore semaphore)
@@ -350,17 +333,22 @@ namespace WilloRHI
 
         uint32_t currentIndex = (uint32_t)presentInfo.swapchain->GetCurrentImageIndex();
 
-        VkPresentInfoKHR info = {};
-        info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        info.pNext = nullptr;
-        info.swapchainCount = 1;
-        info.pSwapchains = &presentInfo.swapchain->impl->_vkSwapchain;
-        info.waitSemaphoreCount = (uint32_t)presentInfo.waitSemaphores.size();
-        info.pWaitSemaphores = waitSemaphores.data();
-        info.pImageIndices = &currentIndex;
-        info.pResults = {};
+        VkPresentInfoKHR info = {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .pNext = nullptr,
+            .waitSemaphoreCount = (uint32_t)presentInfo.waitSemaphores.size(),
+            .pWaitSemaphores = waitSemaphores.data(),
+            .swapchainCount = 1,
+            .pSwapchains = &presentInfo.swapchain->impl->_vkSwapchain,
+            .pImageIndices = &currentIndex,
+            .pResults = {}
+        };
 
-        ErrorCheck(vkQueuePresentKHR(_graphicsQueue, &info));
+        VkResult result = vkQueuePresentKHR(_graphicsQueue, &info);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            presentInfo.swapchain->impl->_resizeRequested = true;
+            LogMessage("Present needs resize", false);
+        }
     }
 
     void ImplDevice::QueueSubmit(const CommandSubmitInfo& submitInfo)
@@ -505,6 +493,10 @@ namespace WilloRHI
 
         Swapchain swapchain{};
         while (queue.swapchainQueue.try_dequeue(swapchain)) {
+            for (int i = 0; i < swapchain.impl->_framesInFlight; i++) {
+                _resources.images.freeSlotQueue.enqueue(swapchain.impl->_images.at(i).id);
+            }
+
             vkDestroySwapchainKHR(_vkDevice, swapchain.impl->_vkSwapchain, nullptr);
             vkDestroySurfaceKHR(_vkInstance, swapchain.impl->_vkSurface, nullptr);
         }
@@ -515,10 +507,13 @@ namespace WilloRHI
         VkSurfaceKHR newSurface = VK_NULL_HANDLE;
         
 #ifdef _WIN32
-        VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
-        surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        surfaceInfo.hwnd = static_cast<HWND>(handle);
-        surfaceInfo.hinstance = GetModuleHandle(nullptr);
+        VkWin32SurfaceCreateInfoKHR surfaceInfo = {
+            .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+            .pNext = nullptr,
+            .flags = 0,
+            .hinstance = GetModuleHandleA(nullptr),
+            .hwnd = static_cast<HWND>(handle)
+        };
 
         vkCreateWin32SurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface);
 #endif
@@ -553,7 +548,7 @@ namespace WilloRHI
 
         newId.id = newSlot;
 
-        LogMessage("Added vulkan image to resources", false);
+        LogMessage("Added vulkan image to resource index " + std::to_string(newId.id), false);
         return newId;
     }
 

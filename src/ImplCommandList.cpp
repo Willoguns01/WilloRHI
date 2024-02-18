@@ -29,9 +29,8 @@ namespace WilloRHI
     {
         VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
 
-        VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         VkImageSubresourceRange resourceRange = {
-            .aspectMask = aspectMask,
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = subresourceRange.baseLevel,
             .levelCount = subresourceRange.numLevels,
             .baseArrayLayer = subresourceRange.baseLayer,

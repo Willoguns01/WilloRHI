@@ -9,7 +9,7 @@ namespace WilloRHI
 {
     struct ImplSwapchain
     {
-        Device* device = nullptr;
+        ImplDevice* device = nullptr;
         VkDevice vkDevice = VK_NULL_HANDLE;
 
         std::vector<ImageId> _images;
@@ -25,9 +25,13 @@ namespace WilloRHI
         int64_t _frameNum = -1;
         uint32_t _currentImageIndex = 0;
 
+        bool _resizeRequested = false;
+
         ImageId AcquireNextImage();
         uint64_t GetCurrentImageIndex() const;
 
         BinarySemaphore const& GetAcquireSemaphore();
+
+        bool ResizeRequested() const;
     };
 }

@@ -1,4 +1,5 @@
 #include "ImplSwapchain.hpp"
+#include "ImplDevice.hpp"
 
 #include "ImplSync.hpp"
 
@@ -7,7 +8,7 @@ namespace WilloRHI
     ImageId ImplSwapchain::AcquireNextImage()
     {
         _frameNum += 1;
-        vkAcquireNextImageKHR(
+        VkResult result = vkAcquireNextImageKHR(
             vkDevice,
             _vkSwapchain,
             1000000000,
@@ -15,6 +16,11 @@ namespace WilloRHI
             nullptr,
             &_currentImageIndex
         );
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            _resizeRequested = true;
+            device->LogMessage("Swapchain needs resize", false);
+        }
 
         return _images[_currentImageIndex];
     }
@@ -27,5 +33,9 @@ namespace WilloRHI
     BinarySemaphore const& ImplSwapchain::GetAcquireSemaphore()
     {
         return _imageSync[_frameNum % _framesInFlight];
+    }
+
+    bool ImplSwapchain::ResizeRequested() const {
+        return _resizeRequested;
     }
 }
