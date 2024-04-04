@@ -352,4 +352,19 @@ namespace WilloRHI
         PRESENT_SRC = 1000001002,
         MAX_ENUM = 0x7fffffff
     };
+
+    enum class AllocationFlagBits : uint32_t {
+        
+    };
+    WilloRHI_DECLARE_FLAG_TYPE(AllocationFlags, AllocationFlagBits, uint32_t)
+
+    enum class ImageUsage : uint32_t {
+        TRANSFER_SRC_BIT = 0x00000001,
+        TRANSFER_DST_BIT = 0x00000002,
+        SAMPLED_BIT = 0x00000004,
+        STORAGE_BIT = 0x00000008,
+        COLOR_ATTACHMENT_BIT = 0x00000010,
+        DEPTH_STENCIL_ATTACHMENT_BIT = 0x00000020,
+    };
+    WilloRHI_DECLARE_FLAG_TYPE(ImageUsageBits, ImageUsage, uint32_t)
 }

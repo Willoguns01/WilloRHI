@@ -1,14 +1,18 @@
 #pragma once
 
+#define WilloRHI_LOGGING_VERBOSE 1
+
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
 #ifdef __linux__
-#if WilloRHI_BUILD_WAYLAND
+#ifdef WilloRHI_BUILD_WAYLAND
+#include <wayland-client.h>
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
-#if WilloRHI_BUILD_X11
+#ifdef WilloRHI_BUILD_X11
+#include <X11/Xlib.h>
 #define VK_USE_PLATFORM_XLIB_KHR
 #endif
 #endif
@@ -18,8 +22,8 @@ namespace WilloRHI
     using NativeWindowHandle = void*;
 }
 
-#include "WilloRHI/Types.hpp"
 #include "WilloRHI/Forward.hpp"
+#include "WilloRHI/Types.hpp"
 
 #include "WilloRHI/Sync.hpp"
 #include "WilloRHI/Resources.hpp"

@@ -11,6 +11,7 @@ namespace WilloRHI
     {
         ImplDevice* device = nullptr;
         VkDevice vkDevice = VK_NULL_HANDLE;
+        VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
 
         std::vector<ImageId> _images;
         std::vector<BinarySemaphore> _imageSync;
@@ -25,13 +26,14 @@ namespace WilloRHI
         int64_t _frameNum = -1;
         uint32_t _currentImageIndex = 0;
 
-        bool _resizeRequested = false;
+        bool _needResize = false;
 
         ImageId AcquireNextImage();
         uint64_t GetCurrentImageIndex() const;
 
         BinarySemaphore const& GetAcquireSemaphore();
 
-        bool ResizeRequested() const;
+        bool NeedsResize() const;
+        void Resize(uint32_t width, uint32_t height, PresentMode presentMode);
     };
 }

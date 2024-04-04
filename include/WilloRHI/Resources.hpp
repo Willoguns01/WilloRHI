@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "WilloRHI/Types.hpp"
+
 namespace WilloRHI
 {
     struct ResourceId {
@@ -15,11 +17,12 @@ namespace WilloRHI
 
     // createinfo structures
     struct BufferCreateInfo {
-
+        uint64_t size = 0;
+        AllocationFlags allocationFlags;
     };
 
     struct ImageCreateInfo {
-
+        
     };
 
     struct ImageViewCreateInfo {

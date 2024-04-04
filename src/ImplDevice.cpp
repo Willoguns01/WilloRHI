@@ -10,18 +10,16 @@
 
 #include <vulkan/vk_enum_string_helper.h>
 
+#include <functional>
+
 namespace WilloRHI
 {
-    Device ImplDevice::CreateDevice(const DeviceCreateInfo& createInfo)
-    {
-        Device newDevice;
-        ImplDevice* impl = newDevice.impl.get();
-
+    void ImplDevice::Init(const DeviceCreateInfo& createInfo) {
         if (createInfo.logCallback != nullptr)
-            impl->_loggingCallback = createInfo.logCallback;
-        impl->_doLogInfo = createInfo.logInfo;
-
-        impl->LogMessage("Initialising Device...", false);
+            _loggingCallback = createInfo.logCallback;
+        _doLogInfo = createInfo.logInfo;
+        
+        LogMessage("Initialising Device...", false);
 
         // TODO: split up into a few different functions to allow moving away from vkb
 
@@ -34,8 +32,8 @@ namespace WilloRHI
             .build();
 
         vkb::Instance vkbInstance = inst_ret.value();
-        impl->_vkInstance = vkbInstance.instance;
-        impl->_vkDebugMessenger = vkbInstance.debug_messenger;
+        _vkInstance = vkbInstance.instance;
+        _vkDebugMessenger = vkbInstance.debug_messenger;
 
         VkPhysicalDeviceVulkan13Features features13 = {
             .synchronization2 = true,
@@ -61,33 +59,39 @@ namespace WilloRHI
         vkb::DeviceBuilder deviceBuilder{physicalDevice};
         vkb::Device vkbDevice = deviceBuilder.build().value();
 
-        impl->_vkbDevice = vkbDevice;
-        impl->_vkDevice = vkbDevice.device;
-        impl->_vkPhysicalDevice = physicalDevice.physical_device;
+        _vkbDevice = vkbDevice;
+        _vkDevice = vkbDevice.device;
+        _vkPhysicalDevice = physicalDevice.physical_device;
 
         VmaAllocatorCreateInfo allocatorInfo = {};
-        allocatorInfo.physicalDevice = impl->_vkPhysicalDevice;
-        allocatorInfo.device = impl->_vkDevice;
-        allocatorInfo.instance = impl->_vkInstance;
+        allocatorInfo.physicalDevice = _vkPhysicalDevice;
+        allocatorInfo.device = _vkDevice;
+        allocatorInfo.instance = _vkInstance;
         allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
         
-        vmaCreateAllocator(&allocatorInfo, &impl->_allocator);
+        vmaCreateAllocator(&allocatorInfo, &_allocator);
 
-        impl->SetupQueues(vkbDevice);
+        SetupQueues(vkbDevice);
 
-        impl->SetupDescriptors(createInfo.resourceCounts);
+        SetupDescriptors(createInfo.resourceCounts);
 
-        impl->_maxFramesInFlight = createInfo.maxFramesInFlight;
+        _maxFramesInFlight = createInfo.maxFramesInFlight;
 
         for (uint32_t i = 0; i < createInfo.maxFramesInFlight; i++) {
-            impl->_deletionQueue.frameQueues.push_back(WilloRHI::DeletionQueues::PerFrame{});
+            _deletionQueue.frameQueues.push_back(WilloRHI::DeletionQueues::PerFrame{});
         }
 
-        impl->LogMessage("Initialised Device", false);
+        LogMessage("Initialised Device", false);
         
         if (createInfo.validationLayers)
-            impl->LogMessage("Validation layers are enabled", false);
+            LogMessage("Validation layers are enabled", false);
+    }
 
+    Device Device::CreateDevice(const DeviceCreateInfo& createInfo)
+    {
+        Device newDevice;
+        newDevice.impl = std::make_shared<ImplDevice>();
+        newDevice.impl->Init(createInfo);
         return newDevice;
     }
 
@@ -117,7 +121,77 @@ namespace WilloRHI
         _resources.imageViews = ResourceMap<ImageViewResource>(countInfo.imageViewCount);
         _resources.samplers = ResourceMap<SamplerResource>(countInfo.samplerCount);
     
-        LogMessage("Initialised resource sets with the following counts:\n - "
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {
+            VkDescriptorSetLayoutBinding {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = (uint32_t)countInfo.bufferCount,
+                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .pImmutableSamplers = nullptr
+            },
+            VkDescriptorSetLayoutBinding {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = (uint32_t)countInfo.imageViewCount,
+                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .pImmutableSamplers = nullptr
+            },
+            VkDescriptorSetLayoutBinding {
+                .binding = 2,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .descriptorCount = (uint32_t)countInfo.imageViewCount,
+                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .pImmutableSamplers = nullptr
+            },
+            VkDescriptorSetLayoutBinding {
+                .binding = 3,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                .descriptorCount = (uint32_t)countInfo.samplerCount,
+                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .pImmutableSamplers = nullptr
+            }
+        };
+
+        std::vector<VkDescriptorPoolSize> poolSizes;
+        for (int i = 0; i < bindings.size(); i++) {
+            poolSizes.push_back(VkDescriptorPoolSize{
+                .type = bindings.at(i).descriptorType,
+                .descriptorCount = bindings.at(i).descriptorCount
+            });
+        }
+
+        VkDescriptorPoolCreateInfo poolInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+            .maxSets = 1,
+            .poolSizeCount = (uint32_t)poolSizes.size(),
+            .pPoolSizes = poolSizes.data()
+        };
+
+        ErrorCheck(vkCreateDescriptorPool(_vkDevice, &poolInfo, nullptr, &_globalDescriptors.pool));
+
+        VkDescriptorSetLayoutCreateInfo setLayoutInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+            .bindingCount = (uint32_t)bindings.size(),
+            .pBindings = bindings.data()
+        };
+
+        ErrorCheck(vkCreateDescriptorSetLayout(_vkDevice, &setLayoutInfo, nullptr, &_globalDescriptors.setLayout));
+
+        VkDescriptorSetAllocateInfo allocInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .descriptorPool = _globalDescriptors.pool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &_globalDescriptors.setLayout
+        };
+
+        ErrorCheck(vkAllocateDescriptorSets(_vkDevice, &allocInfo, &_globalDescriptors.descriptorSet));
+
+        LogMessage("Allocated resource sets with the following counts:\n - "
             + std::to_string(countInfo.bufferCount) + " Buffers\n - "
             + std::to_string(countInfo.imageCount) + " Images\n - "
             + std::to_string(countInfo.imageViewCount) + " ImageViews\n - "
@@ -131,6 +205,7 @@ namespace WilloRHI
         LogMessage("Loaded default resources", false);
     }
 
+    void Device::Cleanup() { impl->Cleanup(); }
     void ImplDevice::Cleanup()
     {
         WaitIdle();
@@ -139,6 +214,9 @@ namespace WilloRHI
             CollectGarbage();
             NextFrame();
         }
+
+        vkDestroyDescriptorSetLayout(_vkDevice, _globalDescriptors.setLayout, nullptr);
+        vkDestroyDescriptorPool(_vkDevice, _globalDescriptors.pool, nullptr);
 
         for (auto& pool : _commandListPool.commandPools) {
             vkDestroyCommandPool(_vkDevice, pool.second, nullptr);
@@ -151,16 +229,18 @@ namespace WilloRHI
         vkDestroyInstance(_vkInstance, nullptr);
     }
 
+    void Device::WaitIdle() const { impl->WaitIdle(); }
     void ImplDevice::WaitIdle() const
     {
         vkDeviceWaitIdle(_vkDevice);
     }
 
+    BinarySemaphore Device::CreateBinarySemaphore() { return impl->CreateBinarySemaphore(); }
     BinarySemaphore ImplDevice::CreateBinarySemaphore()
     {
         BinarySemaphore newSemaphore = {};
         newSemaphore.impl = std::make_shared<ImplBinarySemaphore>();
-        ImplBinarySemaphore* impl = newSemaphore.impl.get();
+        ImplBinarySemaphore* newImpl = newSemaphore.impl.get();
 
         VkSemaphoreCreateInfo createInfo = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -168,16 +248,18 @@ namespace WilloRHI
             .flags = 0
         };
 
-        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &impl->vkSemaphore));
+        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &newImpl->vkSemaphore));
         LogMessage("Created binary semaphore", false);
         return newSemaphore;
     }
 
+    TimelineSemaphore Device::CreateTimelineSemaphore(uint64_t initialValue) {
+        return impl->CreateTimelineSemaphore(initialValue); }
     TimelineSemaphore ImplDevice::CreateTimelineSemaphore(uint64_t initialValue)
     {
         TimelineSemaphore newSemaphore = {};
         newSemaphore.impl = std::make_shared<ImplTimelineSemaphore>();
-        ImplTimelineSemaphore* impl = newSemaphore.impl.get();
+        ImplTimelineSemaphore* newImpl = newSemaphore.impl.get();
 
         VkSemaphoreTypeCreateInfo typeInfo = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -192,19 +274,23 @@ namespace WilloRHI
             .flags = 0
         };
 
-        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &impl->vkSemaphore));
+        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &newImpl->vkSemaphore));
         LogMessage("Created timeline semaphore", false);
         return newSemaphore;
     }
 
-    Swapchain ImplDevice::CreateSwapchain(const SwapchainCreateInfo& createInfo, Device* parent)
+    Swapchain Device::CreateSwapchain(const SwapchainCreateInfo& createInfo) {
+        return impl->CreateSwapchain(createInfo); }
+    Swapchain ImplDevice::CreateSwapchain(const SwapchainCreateInfo& createInfo)
     {
         LogMessage("Creating swapchain...", false);
         Swapchain newSwapchain;
+        newSwapchain.impl = std::make_shared<ImplSwapchain>();
         ImplSwapchain* swapImpl = newSwapchain.impl.get();
 
         swapImpl->device = this;
         swapImpl->vkDevice = _vkDevice;
+        swapImpl->vkPhysicalDevice = _vkPhysicalDevice;
 
         VkSurfaceKHR vkSurface = CreateSurface(createInfo.windowHandle);
 
@@ -240,6 +326,7 @@ namespace WilloRHI
         return newSwapchain;
     }
 
+    CommandList Device::GetCommandList() { return impl->GetCommandList(); }
     CommandList ImplDevice::GetCommandList()
     {
         std::thread::id threadId = std::this_thread::get_id();
@@ -289,16 +376,48 @@ namespace WilloRHI
         return commandList;
     }
 
+    BufferId Device::CreateBuffer(const BufferCreateInfo& createInfo) {
+        return impl->CreateBuffer(createInfo); }
+    BufferId ImplDevice::CreateBuffer(const BufferCreateInfo& createInfo)
+    {
+        const uint32_t queueIndices[3] = {_graphicsQueueIndex, _computeQueueIndex, _transferQueueIndex};
+
+        VkBufferCreateInfo bufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .size = createInfo.size,
+            .usage = BUFFER_USAGE_FLAGS,
+            // apparently concurrent sharing mode has no affect with buffers?
+            // need to test this vs. exclusive sharing with queue ownership transfer
+            .sharingMode = VK_SHARING_MODE_CONCURRENT,
+            .queueFamilyIndexCount = 3,
+            .pQueueFamilyIndices = queueIndices
+        };
+
+        VmaAllocationCreateInfo allocInfo = {
+
+        };
+
+        return {};
+    }
+
+    void Device::DestroyBinarySemaphore(BinarySemaphore semaphore) {
+        impl->DestroyBinarySemaphore(semaphore); }
     void ImplDevice::DestroyBinarySemaphore(BinarySemaphore semaphore) {
         _deletionQueue.frameQueues.at(_frameNum % _maxFramesInFlight)
             .semaphoreQueue.enqueue(semaphore);
     }
 
+    void Device::DestroyTimelineSemaphore(TimelineSemaphore semaphore) {
+        impl->DestroyTimelineSemaphore(semaphore); }
     void ImplDevice::DestroyTimelineSemaphore(TimelineSemaphore semaphore) {
         _deletionQueue.frameQueues.at(_frameNum % _maxFramesInFlight)
             .timelineSemaphoreQueue.enqueue(semaphore);
     }
 
+    void Device::DestroySwapchain(Swapchain swapchain) {
+        impl->DestroySwapchain(swapchain); }
     void ImplDevice::DestroySwapchain(Swapchain swapchain)
     {
         _deletionQueue.frameQueues.at(_frameNum % _maxFramesInFlight)
@@ -310,16 +429,20 @@ namespace WilloRHI
         }
     }
 
+    void Device::NextFrame() { impl->NextFrame(); }
     void ImplDevice::NextFrame()
     {
         _frameNum += 1;
     }
 
+    uint64_t Device::GetFrameNum() { return impl->GetFrameNum(); }
     uint64_t ImplDevice::GetFrameNum()
     {
         return _frameNum;
     }
 
+    void Device::WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout) {
+        impl->WaitSemaphore(semaphore, value, timeout); }
     void ImplDevice::WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout)
     {
         VkSemaphoreWaitInfo waitInfo = {
@@ -333,6 +456,8 @@ namespace WilloRHI
         ErrorCheck(vkWaitSemaphores(_vkDevice, &waitInfo, timeout));
     }
 
+    uint64_t Device::GetSemaphoreValue(TimelineSemaphore semaphore) {
+        return impl->GetSemaphoreValue(semaphore); }
     uint64_t ImplDevice::GetSemaphoreValue(TimelineSemaphore semaphore)
     {
         uint64_t result = 0;
@@ -340,6 +465,8 @@ namespace WilloRHI
         return result;
     }
 
+    void Device::QueuePresent(const PresentInfo& presentInfo) {
+        impl->QueuePresent(presentInfo); }
     void ImplDevice::QueuePresent(const PresentInfo& presentInfo)
     {
         std::vector<VkSemaphore> waitSemaphores;
@@ -362,11 +489,13 @@ namespace WilloRHI
 
         VkResult result = vkQueuePresentKHR(_graphicsQueue, &info);
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            presentInfo.swapchain->impl->_resizeRequested = true;
+            presentInfo.swapchain->impl->_needResize = true;
             LogMessage("Present needs resize", false);
         }
     }
 
+    void Device::QueueSubmit(const CommandSubmitInfo& submitInfo) {
+        impl->QueueSubmit(submitInfo); }
     void ImplDevice::QueueSubmit(const CommandSubmitInfo& submitInfo)
     {
         int64_t commandListCount = submitInfo.commandLists.size();
@@ -444,52 +573,74 @@ namespace WilloRHI
             _deletionQueue.frameQueues.at(_frameNum % _maxFramesInFlight).commandLists.enqueue_bulk(submitInfo.commandLists.begin(), commandListCount);
     }
 
-    // is there even a point to this?
-    // it seems to just overcomplicate code and add lines??
-    // TODO: remove and see if it makes any difference in readability
-    template <typename Handle_T, typename Resource_T>
-    void DestroyDeviceResources(ResourceMap<Resource_T>* resourceMap,
-        moodycamel::ConcurrentQueue<Handle_T>* deletionQueue, 
-        VmaAllocator allocator, VkDevice device,
-        void(*func)(Handle_T, Resource_T*, VmaAllocator, VkDevice)) 
-    {
-        Handle_T handle{};
-        while (deletionQueue->try_dequeue(handle)) {
-            Resource_T* rsrc = &resourceMap->resources[handle.id];
-            func(handle, rsrc, allocator, device);
-            resourceMap->freeSlotQueue.enqueue(handle.id);
-        }
-    }
-
+    void Device::CollectGarbage() { impl->CollectGarbage(); }
     void ImplDevice::CollectGarbage()
     {
         int64_t frameIndex = _frameNum % _maxFramesInFlight;
         DeletionQueues::PerFrame& queue = _deletionQueue.frameQueues.at(frameIndex);
 
-        DestroyDeviceResources<BufferId, BufferResource>(
-            &_resources.buffers, &queue.bufferQueue, _allocator, _vkDevice,
-            [](BufferId handle, BufferResource* resource, VmaAllocator allocator, VkDevice device) {
-                vmaDestroyBuffer(allocator, resource->buffer, resource->allocation);
-            });
+        // buffer
+        BufferId bufferHandle{};
+        while (queue.bufferQueue.try_dequeue(bufferHandle)) {
+            BufferResource* rsrc = &_resources.buffers.resources[bufferHandle.id];
+            vmaDestroyBuffer(_allocator, rsrc->buffer, rsrc->allocation);
+            _resources.buffers.freeSlotQueue.enqueue(bufferHandle.id);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed buffer " + std::to_string(bufferHandle.id), false);
+#endif
+        }
 
-        DestroyDeviceResources<ImageId, ImageResource>(
-            &_resources.images, &queue.imageQueue, _allocator, _vkDevice,
-            [](ImageId handle, ImageResource* resource, VmaAllocator allocator, VkDevice device) {
-                vmaDestroyImage(allocator, resource->image, resource->allocation);
-            });
+        // image
+        ImageId imageHandle{};
+        while (queue.imageQueue.try_dequeue(imageHandle)) {
+            ImageResource* rsrc = &_resources.images.resources[imageHandle.id];
+            vmaDestroyImage(_allocator, rsrc->image, rsrc->allocation);
+            _resources.images.freeSlotQueue.enqueue(imageHandle.id);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed image " + std::to_string(imageHandle.id), false);
+#endif
+        }
 
-        DestroyDeviceResources<ImageViewId, ImageViewResource>(
-            &_resources.imageViews, &queue.imageViewQueue, _allocator, _vkDevice,
-            [](ImageViewId handle, ImageViewResource* resource, VmaAllocator allocator, VkDevice device) {
-                vkDestroyImageView(device, resource->imageView, nullptr);
-            });
+        // image view
+        ImageViewId viewHandle{};
+        while (queue.imageViewQueue.try_dequeue(viewHandle)) {
+            ImageViewResource* rsrc = &_resources.imageViews.resources[viewHandle.id];
+            vkDestroyImageView(_vkDevice, rsrc->imageView, nullptr);
+            _resources.imageViews.freeSlotQueue.enqueue(viewHandle.id);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed image view " + std::to_string(viewHandle.id), false);
+#endif
+        }
 
-        DestroyDeviceResources<SamplerId, SamplerResource>(
-            &_resources.samplers, &queue.samplerQueue, _allocator, _vkDevice,
-            [](SamplerId handle, SamplerResource* resource, VmaAllocator allocator, VkDevice device) {
-                vkDestroySampler(device, resource->sampler, nullptr);
-            });
+        // sampler
+        SamplerId samplerHandle{};
+        while (queue.samplerQueue.try_dequeue(samplerHandle)) {
+            SamplerResource* rsrc = &_resources.samplers.resources[samplerHandle.id];
+            vkDestroySampler(_vkDevice, rsrc->sampler, nullptr);
+            _resources.samplers.freeSlotQueue.enqueue(samplerHandle.id);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed sampler " + std::to_string(samplerHandle.id), false);
+#endif
+        }
 
+        // semaphores
+        BinarySemaphore binSemaphore{};
+        while (queue.semaphoreQueue.try_dequeue(binSemaphore)) {
+            vkDestroySemaphore(_vkDevice, binSemaphore.impl->vkSemaphore, nullptr);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed binary semaphore", false);
+#endif
+        }
+
+        TimelineSemaphore timSemaphore{};
+        while (queue.timelineSemaphoreQueue.try_dequeue(timSemaphore)) {
+            vkDestroySemaphore(_vkDevice, timSemaphore.impl->vkSemaphore, nullptr);
+#if WilloRHI_LOGGING_VERBOSE
+            LogMessage("Destroyed timeline semaphore", false);
+#endif
+        }
+
+        // commandlists
         CommandList cmdList;
         while (queue.commandLists.try_dequeue(cmdList)) {
             vkResetCommandBuffer(cmdList.impl->_vkCommandBuffer, 0);
@@ -497,16 +648,7 @@ namespace WilloRHI
             map->at(cmdList.impl->_threadId).enqueue(cmdList);
         }
 
-        BinarySemaphore binSemaphore{};
-        while (queue.semaphoreQueue.try_dequeue(binSemaphore)) {
-            vkDestroySemaphore(_vkDevice, binSemaphore.impl->vkSemaphore, nullptr);
-        }
-
-        TimelineSemaphore timSemaphore{};
-        while (queue.timelineSemaphoreQueue.try_dequeue(timSemaphore)) {
-            vkDestroySemaphore(_vkDevice, timSemaphore.impl->vkSemaphore, nullptr);
-        }
-
+        // swapchains
         Swapchain swapchain{};
         while (queue.swapchainQueue.try_dequeue(swapchain)) {
             for (int i = 0; i < swapchain.impl->_framesInFlight; i++) {
@@ -531,16 +673,41 @@ namespace WilloRHI
             .hwnd = static_cast<HWND>(handle)
         };
 
-        vkCreateWin32SurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface);
+        ErrorCheck(vkCreateWin32SurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
+        LogMessage("Created Win32 window surface", false);
 #endif
 
+        // I have no idea if this linux stuff works, need to check
 #ifdef __linux__
 #ifdef WilloRHI_BUILD_WAYLAND
+        if (std::getenv("WAYLAND_DISPLAY")) {
+            VkWaylandSurfaceCreateInfoKHR surfaceInfo = {
+                .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+                .pNext = nullptr,
+                .flags = 0,
+                .display = wl_display_connect(nullptr),
+                .surface = static_cast<wl_surface*>(handle)
+            };
+
+            ErrorCheck(vkCreateWaylandSurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
+            LogMessage("Created Wayland window surface", false);
+        }
 #endif
 #ifdef WilloRHI_BUILD_X11
+        if (std::getenv("DISPLAY")) {
+            VkXlibSurfaceCreateInfoKHR surfaceInfo = {
+                .sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+                .pNext = nullptr,
+                .flags = 0,
+                .dpy = XOpenDisplay(nullptr),
+                .window = reinterpret_cast<Window>(handle),
+            };
+
+            ErrorCheck(vkCreateXlibSurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
+            LogMessage("Created X11 window surface", false);
+        }
 #endif
 #endif
-        LogMessage("Created Vulkan surface", false);
         return newSurface;
     }
 
@@ -590,6 +757,14 @@ namespace WilloRHI
         return newId;
     }
 
+    void Device::LogMessage(const std::string& message, bool error) {
+        impl->LogMessage(message, error);
+    }
+
+    void Device::ErrorCheck(uint64_t errorCode) {
+        impl->ErrorCheck(errorCode);
+    }
+
     void ImplDevice::LogMessage(const std::string& message, bool error)
     {
         if (_loggingCallback) {
@@ -602,8 +777,9 @@ namespace WilloRHI
         }
     }
 
-    void ImplDevice::ErrorCheck(VkResult result)
+    void ImplDevice::ErrorCheck(uint64_t errorCode)
     {
+        VkResult result = static_cast<VkResult>(errorCode);
         if (result != VK_SUCCESS && _loggingCallback) {
             LogMessage(std::string("Vulkan Error: ") + std::string(string_VkResult(result)));
         }

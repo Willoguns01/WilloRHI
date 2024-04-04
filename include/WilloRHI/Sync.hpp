@@ -5,20 +5,24 @@
 namespace WilloRHI
 {
     struct BinarySemaphore {
-        public:
+    public:
         BinarySemaphore() = default;
 
-        protected:
+        //void* GetNativeHandle();
+
+    protected:
         friend ImplDevice;
         friend ImplSwapchain;
         std::shared_ptr<ImplBinarySemaphore> impl = nullptr;
     };
 
     struct TimelineSemaphore {
-        public:
+    public:
         TimelineSemaphore() = default;
 
-        protected:
+        //void* GetNativeHandle();
+
+    protected:
         friend ImplDevice;
         friend ImplSwapchain;
         std::shared_ptr<ImplTimelineSemaphore> impl = nullptr;

@@ -26,10 +26,10 @@ int main()
     glfwSwapInterval(1);
 
     WilloRHI::ResourceCountInfo countInfo = {
-        .bufferCount = 0,
-        .imageCount = 6,
-        .imageViewCount = 0,
-        .samplerCount = 0
+        .bufferCount = 32,
+        .imageCount = 32,
+        .imageViewCount = 32,
+        .samplerCount = 32
     };
 
     WilloRHI::DeviceCreateInfo deviceInfo = {
@@ -41,12 +41,21 @@ int main()
         .maxFramesInFlight = FRAME_OVERLAP
     };
 
+    //WilloRHI::DeviceCreateInfo deviceInfo = {
+    //    .applicationName = "01_Initialization",
+    //    .validationLayers = false,
+    //    .logCallback = nullptr,
+    //    .logInfo = false,
+    //    .resourceCounts = countInfo,
+    //    .maxFramesInFlight = FRAME_OVERLAP
+    //};
+
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
+        .presentMode = WilloRHI::PresentMode::FIFO,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
@@ -70,14 +79,10 @@ int main()
         int newWidth, newHeight;
         glfwGetWindowSize(window, &newWidth, &newHeight);
         if (newWidth != swapchainInfo.width || newHeight != swapchainInfo.height) {
-            device.WaitIdle();
-            device.DestroySwapchain(swapchain);
-            device.CollectGarbage();
-
             swapchainInfo.width = newWidth;
             swapchainInfo.height = newHeight;
-
-            swapchain = device.CreateSwapchain(swapchainInfo);
+            swapchain.Resize(newWidth, newHeight, swapchainInfo.presentMode);
+            continue;
         }
 
         device.WaitSemaphore(gpuTimeline, device.GetFrameNum(), 1000000000);
@@ -95,12 +100,7 @@ int main()
             .dstAccess = WilloRHI::MemoryAccess::READ | WilloRHI::MemoryAccess::WRITE,
             .srcLayout = WilloRHI::ImageLayout::UNDEFINED,
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
-            .subresourceRange = {
-                .baseLevel = 0,
-                .numLevels = 1,
-                .baseLayer = 0,
-                .numLayers = 1
-            }
+            .subresourceRange = {}
         };
 
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);

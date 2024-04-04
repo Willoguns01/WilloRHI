@@ -30,11 +30,6 @@ namespace WilloRHI
         std::vector<BinarySemaphore> waitBinarySemaphores;
         std::vector<BinarySemaphore> signalBinarySemaphores;
         std::vector<CommandList> commandLists;
-
-        // controls whether the submitted cmdlists are pushed into the current frame's deletion queue
-        // the next time CollectGarbage is called for this frame index, those cmdlists are
-        // reset and made ready for reuse
-        // if false, the cmdlist is simply left alone and the client has to manually reset it
         bool syncToTimeline = true;
     };
 
@@ -69,7 +64,7 @@ namespace WilloRHI
     class Device
     {
     public:
-        Device();
+        Device() = default;
 
         static Device CreateDevice(const DeviceCreateInfo& createInfo);
 
@@ -83,6 +78,8 @@ namespace WilloRHI
         Swapchain CreateSwapchain(const SwapchainCreateInfo& createInfo);
 
         CommandList GetCommandList();
+
+        BufferId CreateBuffer(const BufferCreateInfo& createInfo);
 
         // deletion functions
 
@@ -105,8 +102,10 @@ namespace WilloRHI
         // any resources set as destroyed for that frame
         void CollectGarbage();
 
+        void LogMessage(const std::string& message, bool error = true);
+        void ErrorCheck(uint64_t errorCode);
+
     protected:
-        friend ImplDevice;
-        std::shared_ptr<ImplDevice> impl;
+        std::shared_ptr<ImplDevice> impl = nullptr;
     };
 }

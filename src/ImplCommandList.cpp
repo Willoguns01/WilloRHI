@@ -3,11 +3,13 @@
 
 namespace WilloRHI
 {
+    void CommandList::Reset() { impl->Reset(); }
     void ImplCommandList::Reset()
     {
         vkResetCommandBuffer(_vkCommandBuffer, 0);
     }
 
+    void CommandList::Begin() { impl->Begin(); }
     void ImplCommandList::Begin()
     {
         VkCommandBufferBeginInfo beginInfo = {
@@ -20,11 +22,14 @@ namespace WilloRHI
         vkBeginCommandBuffer(_vkCommandBuffer, &beginInfo);
     }
 
+    void CommandList::End() { impl->End(); }
     void ImplCommandList::End()
     {
         vkEndCommandBuffer(_vkCommandBuffer);
     }
 
+    void CommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange) {
+        impl->ClearImage(image, clearColour, subresourceRange); }
     void ImplCommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange)
     {
         VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
@@ -41,6 +46,8 @@ namespace WilloRHI
         vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
     }
 
+    void CommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo) {
+        impl->TransitionImageLayout(image, barrierInfo); }
     // TODO: we should "queue" barriers,
     // then once we run some other kind of cmd,
     // we flush them all with a single call

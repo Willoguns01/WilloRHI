@@ -1,16 +1,20 @@
-#pragma once
-
 namespace WilloRHI
 {
     class Device;
-    class CommandList;
-    class Swapchain;
-    struct BinarySemaphore;
-    struct TimelineSemaphore;
-
     struct ImplDevice;
+
+    class CommandList;
     struct ImplCommandList;
+
+    class Queue;
+    struct ImplQueue;
+
+    class Swapchain;
     struct ImplSwapchain;
+
+    struct BinarySemaphore;
     struct ImplBinarySemaphore;
+
+    struct TimelineSemaphore;
     struct ImplTimelineSemaphore;
 }

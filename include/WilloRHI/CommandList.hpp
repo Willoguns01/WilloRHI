@@ -7,9 +7,9 @@ namespace WilloRHI
     struct ImageSubresourceRange 
     {
         uint32_t baseLevel = 0;
-        uint32_t numLevels = 0;
+        uint32_t numLevels = 1;
         uint32_t baseLayer = 0;
-        uint32_t numLayers = 0;
+        uint32_t numLayers = 1;
     };
 
     struct ImageMemoryBarrierInfo
@@ -25,7 +25,7 @@ namespace WilloRHI
 
     class CommandList
     {
-        public:
+    public:
         CommandList() = default;
 
         void Reset();
@@ -37,7 +37,7 @@ namespace WilloRHI
 
         void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
 
-        protected:
+    protected:
         friend ImplDevice;
         std::shared_ptr<ImplCommandList> impl = nullptr;
     };
