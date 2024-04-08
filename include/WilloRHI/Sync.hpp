@@ -1,6 +1,8 @@
 #pragma once
 
-#include "WilloRHI/WilloRHI.hpp"
+#include "WilloRHI/Forward.hpp"
+
+#include <memory>
 
 namespace WilloRHI
 {
@@ -13,6 +15,7 @@ namespace WilloRHI
     protected:
         friend ImplDevice;
         friend ImplSwapchain;
+        friend ImplQueue;
         std::shared_ptr<ImplBinarySemaphore> impl = nullptr;
     };
 
@@ -25,6 +28,7 @@ namespace WilloRHI
     protected:
         friend ImplDevice;
         friend ImplSwapchain;
+        friend ImplQueue;
         std::shared_ptr<ImplTimelineSemaphore> impl = nullptr;
     };
 }

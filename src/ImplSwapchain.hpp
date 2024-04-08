@@ -9,7 +9,7 @@ namespace WilloRHI
 {
     struct ImplSwapchain
     {
-        ImplDevice* device = nullptr;
+        std::shared_ptr<ImplDevice> device = nullptr;
         VkDevice vkDevice = VK_NULL_HANDLE;
         VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
 
@@ -27,6 +27,8 @@ namespace WilloRHI
         uint32_t _currentImageIndex = 0;
 
         bool _needResize = false;
+
+        void Init(Device device, const SwapchainCreateInfo& createInfo);
 
         ImageId AcquireNextImage();
         uint64_t GetCurrentImageIndex() const;

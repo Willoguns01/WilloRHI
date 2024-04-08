@@ -1,7 +1,5 @@
 #pragma once
 
-#define WilloRHI_LOGGING_VERBOSE 1
-
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
@@ -17,11 +15,6 @@
 #endif
 #endif
 
-namespace WilloRHI
-{
-    using NativeWindowHandle = void*;
-}
-
 #include "WilloRHI/Forward.hpp"
 #include "WilloRHI/Types.hpp"
 
@@ -31,3 +24,4 @@ namespace WilloRHI
 #include "WilloRHI/Device.hpp"
 #include "WilloRHI/Swapchain.hpp"
 #include "WilloRHI/CommandList.hpp"
+#include "WilloRHI/Queue.hpp"

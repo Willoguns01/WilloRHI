@@ -6,14 +6,10 @@
 
 namespace WilloRHI
 {
-    struct ResourceId {
-        uint64_t id = 0;
-    };
-
-    struct BufferId : public ResourceId {};
-    struct ImageId : public ResourceId {};
-    struct ImageViewId : public ResourceId {};
-    struct SamplerId : public ResourceId {};
+    struct BufferId    { uint64_t id = 0; };
+    struct ImageId     { uint64_t id = 0; };
+    struct ImageViewId { uint64_t id = 0; };
+    struct SamplerId   { uint64_t id = 0; };
 
     // createinfo structures
     struct BufferCreateInfo {

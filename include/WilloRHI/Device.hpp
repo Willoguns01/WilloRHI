@@ -1,44 +1,17 @@
 #pragma once
 
-#include "WilloRHI/WilloRHI.hpp"
+#include "WilloRHI/Forward.hpp"
+#include "WilloRHI/Util.hpp"
+#include "WilloRHI/Resources.hpp"
+
+#include <stdint.h>
+#include <string>
+#include <memory>
 
 #undef CreateSemaphore
 
 namespace WilloRHI
 {
-    struct SwapchainCreateInfo
-    {
-        NativeWindowHandle windowHandle = nullptr;
-        Format format = Format::UNDEFINED;
-        PresentMode presentMode = PresentMode::IMMEDIATE;
-        uint32_t width = 0;
-        uint32_t height = 0;
-        uint32_t framesInFlight = 2;
-    };
-
-    enum class SubmitQueueType {
-        GRAPHICS,
-        COMPUTE,
-        TRANSFER
-    };
-
-    struct CommandSubmitInfo
-    {
-        SubmitQueueType queueType = SubmitQueueType::GRAPHICS;
-        std::vector<std::pair<TimelineSemaphore, uint64_t>> waitTimelineSemaphores;
-        std::vector<std::pair<TimelineSemaphore, uint64_t>> signalTimelineSemaphores;
-        std::vector<BinarySemaphore> waitBinarySemaphores;
-        std::vector<BinarySemaphore> signalBinarySemaphores;
-        std::vector<CommandList> commandLists;
-        bool syncToTimeline = true;
-    };
-
-    struct PresentInfo
-    {
-        std::vector<BinarySemaphore> waitSemaphores = {};
-        Swapchain* swapchain;
-    };
-
     // these are some sane-ish defaults to allow any application run just fine
     // this exists for optimisation purposes where the client app may want
     // to reduce memory usage or runtime performance costs of having many descriptors
@@ -58,7 +31,6 @@ namespace WilloRHI
         RHILoggingFunc logCallback = nullptr;
         bool logInfo = false;
         ResourceCountInfo resourceCounts = {};
-        uint32_t maxFramesInFlight = 2;
     };
 
     class Device
@@ -75,9 +47,6 @@ namespace WilloRHI
 
         BinarySemaphore CreateBinarySemaphore();
         TimelineSemaphore CreateTimelineSemaphore(uint64_t initialValue);
-        Swapchain CreateSwapchain(const SwapchainCreateInfo& createInfo);
-
-        CommandList GetCommandList();
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
 
@@ -89,14 +58,8 @@ namespace WilloRHI
 
         // functionality
 
-        void NextFrame();
-        uint64_t GetFrameNum();
-
         void WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout);
         uint64_t GetSemaphoreValue(TimelineSemaphore semaphore);
-
-        void QueuePresent(const PresentInfo& presentInfo);
-        void QueueSubmit(const CommandSubmitInfo& submitInfo);
 
         // call at the beginning of each frame - finalises destruction of 
         // any resources set as destroyed for that frame
@@ -106,6 +69,9 @@ namespace WilloRHI
         void ErrorCheck(uint64_t errorCode);
 
     protected:
+        friend ImplSwapchain;
+        friend ImplQueue;
+        friend ImplCommandList;
         std::shared_ptr<ImplDevice> impl = nullptr;
     };
 }

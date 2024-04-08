@@ -1,12 +1,64 @@
 #include "ImplSwapchain.hpp"
 #include "ImplDevice.hpp"
 
+#include "WilloRHI/Resources.hpp"
+
 #include <VkBootstrap.h>
 
 #include "ImplSync.hpp"
 
 namespace WilloRHI
 {
+    Swapchain Swapchain::Create(Device device, const SwapchainCreateInfo& createInfo)
+    {
+        Swapchain newSwapchain;
+        newSwapchain.impl = std::make_shared<ImplSwapchain>();
+        newSwapchain.impl->Init(device, createInfo);
+        return newSwapchain;
+    }
+
+    void ImplSwapchain::Init(Device pDevice, const SwapchainCreateInfo& createInfo)
+    {
+        std::shared_ptr<ImplDevice> deviceImpl = pDevice.impl;
+        device = deviceImpl;
+
+        vkDevice = device->_vkDevice;
+        vkPhysicalDevice = device->_vkPhysicalDevice;
+
+        _vkSurface = device->CreateSurface(createInfo.windowHandle);
+
+        vkb::SwapchainBuilder swapchainBuilder{vkPhysicalDevice, vkDevice, _vkSurface};
+
+        vkb::Swapchain vkbSwapchain = swapchainBuilder
+            .set_desired_format(VkSurfaceFormatKHR{.format = static_cast<VkFormat>(createInfo.format), .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+            .set_desired_present_mode(static_cast<VkPresentModeKHR>(createInfo.presentMode))
+            .set_desired_extent(createInfo.width, createInfo.height)
+            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+            .set_required_min_image_count(createInfo.framesInFlight)
+            .build()
+            .value();
+
+        _vkSwapchain = vkbSwapchain.swapchain;
+        _swapchainExtent = Extent2D{.width = createInfo.width, .height = createInfo.height};
+        _swapchainFormat = createInfo.format;
+        _framesInFlight = createInfo.framesInFlight;
+
+        std::vector<VkImage> vkImages = vkbSwapchain.get_images().value();
+
+        _images.reserve((size_t)createInfo.framesInFlight);
+
+        for (uint32_t i = 0; i < createInfo.framesInFlight; i++)
+        {
+            uint64_t imageId = device->_resources.images.Allocate();
+            device->_resources.images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
+            _images.push_back(ImageId{.id = imageId});
+
+            _imageSync.push_back(device->CreateBinarySemaphore());
+        }
+        
+        device->LogMessage("Created swapchain", false);
+    }
+
     ImageId Swapchain::AcquireNextImage() { return impl->AcquireNextImage(); }
     ImageId ImplSwapchain::AcquireNextImage()
     {
@@ -71,8 +123,11 @@ namespace WilloRHI
 
         for (int32_t i = 0; i < _framesInFlight; i++)
         {
-            device->_resources.images.freeSlotQueue.enqueue(_images[i].id);
-            _images[i] = device->AddImageResource(vkImages[i], nullptr, {});
+            device->_resources.images.Free(_images.at(i).id);
+            uint64_t imageId = device->_resources.images.Allocate();
+
+            device->_resources.images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
+            _images.at(i) = ImageId{.id = imageId};
         }
 
         device->LogMessage("Resized swapchain", false);

@@ -1,6 +1,11 @@
 #pragma once
 
-#include "WilloRHI.hpp"
+#include "WilloRHI/Forward.hpp"
+#include "WilloRHI/Types.hpp"
+#include "WilloRHI/Resources.hpp"
+
+#include <stdint.h>
+#include <memory>
 
 namespace WilloRHI
 {
@@ -39,6 +44,7 @@ namespace WilloRHI
 
     protected:
         friend ImplDevice;
+        friend ImplQueue;
         std::shared_ptr<ImplCommandList> impl = nullptr;
     };
 }

@@ -1,20 +1,20 @@
 #pragma once 
 
 #include "WilloRHI/Device.hpp"
-#include "WilloRHI/Util.hpp"
 
 #include <vulkan/vulkan.h>
-
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
-
 #include <concurrentqueue.h>
 
 #include <unordered_map>
 #include <thread>
+#include <shared_mutex>
 
 namespace WilloRHI
 {
+    using NativeWindowHandle = void*;
+
     static const inline VkBufferUsageFlags BUFFER_USAGE_FLAGS = 
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
@@ -46,26 +46,21 @@ namespace WilloRHI
         VkSampler sampler = VK_NULL_HANDLE;
     };
 
-    struct DeletionQueues
-    {
-        struct PerFrame {
-            moodycamel::ConcurrentQueue<BufferId> bufferQueue = moodycamel::ConcurrentQueue<BufferId>();
-            moodycamel::ConcurrentQueue<ImageId> imageQueue = moodycamel::ConcurrentQueue<ImageId>();
-            moodycamel::ConcurrentQueue<ImageViewId> imageViewQueue = moodycamel::ConcurrentQueue<ImageViewId>();
-            moodycamel::ConcurrentQueue<SamplerId> samplerQueue = moodycamel::ConcurrentQueue<SamplerId>();
-            moodycamel::ConcurrentQueue<BinarySemaphore> semaphoreQueue = moodycamel::ConcurrentQueue<BinarySemaphore>();
-            moodycamel::ConcurrentQueue<TimelineSemaphore> timelineSemaphoreQueue = moodycamel::ConcurrentQueue<TimelineSemaphore>();
-            
-            moodycamel::ConcurrentQueue<Swapchain> swapchainQueue = moodycamel::ConcurrentQueue<Swapchain>();
+    struct DeletionQueues {
+        // uint64_t is timeline value that object should be deleted on
 
-            moodycamel::ConcurrentQueue<CommandList> commandLists = moodycamel::ConcurrentQueue<CommandList>();
-        };
-        
-        std::vector<PerFrame> frameQueues = std::vector<PerFrame>(1);
+        template <typename T>
+        using QueueType =  moodycamel::ConcurrentQueue<T>;
+
+        QueueType<BufferId> bufferQueue = QueueType<BufferId>();
+        QueueType<ImageId> imageQueue = QueueType<ImageId>();
+        QueueType<ImageViewId> imageViewQueue = QueueType<ImageViewId>();
+        QueueType<SamplerId> samplerQueue = QueueType<SamplerId>();
     };
 
     template <typename Resource_T>
     struct ResourceMap {
+        ImplDevice* device;
         Resource_T* resources = nullptr;
         moodycamel::ConcurrentQueue<uint64_t> freeSlotQueue;
         uint64_t maxNumResources = 0;
@@ -73,6 +68,7 @@ namespace WilloRHI
         ResourceMap() {}
         ResourceMap(uint64_t maxCount) {
             resources = new Resource_T[maxCount];
+            
             freeSlotQueue = moodycamel::ConcurrentQueue<uint64_t>(maxCount);
             maxNumResources = maxCount;
 
@@ -81,6 +77,20 @@ namespace WilloRHI
                 vec.push_back(i);
             freeSlotQueue.enqueue_bulk(vec.begin(), maxNumResources);
         }
+
+        uint64_t Allocate() {
+            uint64_t newSlot = 0;
+            freeSlotQueue.try_dequeue(newSlot);
+            return newSlot;
+        }
+
+        Resource_T& At(uint64_t index) {
+            return resources[index];
+        }
+
+        void Free(uint64_t index) {
+            freeSlotQueue.enqueue(index);
+        }
     };
 
     struct DeviceResources {
@@ -88,12 +98,12 @@ namespace WilloRHI
         ResourceMap<ImageResource> images;
         ResourceMap<ImageViewResource> imageViews;
         ResourceMap<SamplerResource> samplers;
-    };
 
-    struct CommandListPool {
-        std::unordered_map<std::thread::id, VkCommandPool> commandPools;
-        typedef std::unordered_map<std::thread::id, moodycamel::ConcurrentQueue<CommandList>> MapType;
-        MapType primaryBuffers;
+        std::shared_mutex resourcesMutex;
+        /*
+        * shared: commandlist record, resource create
+        * unique: CollectGarbage
+        */
     };
 
     struct GlobalDescriptors {
@@ -113,29 +123,19 @@ namespace WilloRHI
         VmaAllocator _allocator = VK_NULL_HANDLE;
         vkb::SystemInfo _sysInfo = vkb::SystemInfo::get_system_info().value();
 
-        VkQueue _graphicsQueue = VK_NULL_HANDLE;
-        uint32_t _graphicsQueueIndex = 0;
-        VkQueue _computeQueue = VK_NULL_HANDLE;
-        uint32_t _computeQueueIndex = 0;
-        VkQueue _transferQueue = VK_NULL_HANDLE;
-        uint32_t _transferQueueIndex = 0;
+        uint32_t _vkQueueIndices[3] = {0,0,0};
+        std::vector<Queue> _deviceQueues;
 
         DeviceResources _resources;
-        DeletionQueues _deletionQueue;
         GlobalDescriptors _globalDescriptors;
-        CommandListPool _commandListPool;
 
         RHILoggingFunc _loggingCallback = nullptr;
         bool _doLogInfo = false;
-
-        uint32_t _maxFramesInFlight = 0;
-        uint64_t _frameNum = 0;
 
         // functionality
 
         void Init(const DeviceCreateInfo& createInfo);
 
-        void SetupQueues(vkb::Device vkbDevice);
         void SetupDescriptors(const ResourceCountInfo& countInfo);
         void SetupDefaultResources();
 
@@ -146,9 +146,6 @@ namespace WilloRHI
 
         BinarySemaphore CreateBinarySemaphore();
         TimelineSemaphore CreateTimelineSemaphore(uint64_t initialValue);
-        Swapchain CreateSwapchain(const SwapchainCreateInfo& createInfo);
-
-        CommandList GetCommandList();
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
 
@@ -160,14 +157,8 @@ namespace WilloRHI
 
         // functionality
 
-        void NextFrame();
-        uint64_t GetFrameNum();
-
         void WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout);
         uint64_t GetSemaphoreValue(TimelineSemaphore semaphore);
-
-        void QueuePresent(const PresentInfo& presentInfo);
-        void QueueSubmit(const CommandSubmitInfo& submitInfo);
 
         // call at the beginning of each frame - finalises destruction of 
         // any resources set as destroyed for that frame
@@ -177,10 +168,5 @@ namespace WilloRHI
         void ErrorCheck(uint64_t errorCode);
 
         VkSurfaceKHR CreateSurface(NativeWindowHandle handle);
-
-        // gets next available slot for resource, adds into maps
-        // will also do other things like write descriptor array
-        ImageId AddImageResource(VkImage image, VmaAllocation allocation, const ImageCreateInfo& createInfo);
-        ImageViewId AddImageViewResource(VkImageView view, const ImageViewCreateInfo& createInfo);
     };
 }

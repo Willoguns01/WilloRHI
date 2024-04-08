@@ -32,36 +32,34 @@ int main()
         .samplerCount = 32
     };
 
-    WilloRHI::DeviceCreateInfo deviceInfo = {
-        .applicationName = "01_Initialization",
-        .validationLayers = true,
-        .logCallback = &OutputMessage,
-        .logInfo = true,
-        .resourceCounts = countInfo,
-        .maxFramesInFlight = FRAME_OVERLAP
-    };
-
     //WilloRHI::DeviceCreateInfo deviceInfo = {
     //    .applicationName = "01_Initialization",
-    //    .validationLayers = false,
-    //    .logCallback = nullptr,
-    //    .logInfo = false,
-    //    .resourceCounts = countInfo,
-    //    .maxFramesInFlight = FRAME_OVERLAP
+    //    .validationLayers = true,
+    //    .logCallback = &OutputMessage,
+    //    .logInfo = true,
+    //    .resourceCounts = countInfo
     //};
+
+    WilloRHI::DeviceCreateInfo deviceInfo = {
+        .applicationName = "01_Initialization",
+        .validationLayers = false,
+        .logCallback = nullptr,
+        .logInfo = false,
+        .resourceCounts = countInfo
+    };
 
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::FIFO,
+        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
     };
 
-    WilloRHI::Swapchain swapchain = device.CreateSwapchain(swapchainInfo);
+    WilloRHI::Swapchain swapchain = WilloRHI::Swapchain::Create(device, swapchainInfo);
 
     std::vector<WilloRHI::BinarySemaphore> renderSemaphores;
     for (int i = 0; i < FRAME_OVERLAP; i++) {
@@ -69,6 +67,9 @@ int main()
     }
 
     WilloRHI::TimelineSemaphore gpuTimeline = device.CreateTimelineSemaphore(0);
+    uint64_t frameNum = 0;
+
+    WilloRHI::Queue graphicsQueue = WilloRHI::Queue::Create(device, WilloRHI::QueueType::GRAPHICS);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -85,12 +86,11 @@ int main()
             continue;
         }
 
-        device.WaitSemaphore(gpuTimeline, device.GetFrameNum(), 1000000000);
-        device.NextFrame();
+        device.WaitSemaphore(gpuTimeline, frameNum, 1000000000);
         WilloRHI::ImageId swapchainImage = swapchain.AcquireNextImage();
-        device.CollectGarbage();
 
-        WilloRHI::CommandList cmdList = device.GetCommandList();
+        frameNum += 1;
+        WilloRHI::CommandList cmdList = graphicsQueue.GetCmdList();
         cmdList.Begin();
 
         WilloRHI::ImageMemoryBarrierInfo barrierInfo = {
@@ -114,22 +114,24 @@ int main()
         cmdList.End();
 
         WilloRHI::CommandSubmitInfo submitInfo = {
-            .queueType = WilloRHI::SubmitQueueType::GRAPHICS,
-            .signalTimelineSemaphores = { { gpuTimeline, device.GetFrameNum() } },
+            .signalTimelineSemaphores = { { gpuTimeline, frameNum } },
             .waitBinarySemaphores = { swapchain.GetAcquireSemaphore() },
             .signalBinarySemaphores = { renderSemaphores.at(swapchain.GetCurrentImageIndex()) },
             .commandLists = { cmdList }
         };
 
-        device.QueueSubmit(submitInfo);
+        graphicsQueue.Submit(submitInfo);
 
         WilloRHI::PresentInfo presentInfo = {
             .waitSemaphores = { renderSemaphores.at(swapchain.GetCurrentImageIndex()) },
-            .swapchain = &swapchain
+            .swapchain = swapchain
         };
 
-        device.QueuePresent(presentInfo);
+        graphicsQueue.Present(presentInfo);
+        device.CollectGarbage();
     }
+
+    device.WaitIdle();
 
     for (int i = 0; i < FRAME_OVERLAP; i++) {
         device.DestroyBinarySemaphore(renderSemaphores.at(i));

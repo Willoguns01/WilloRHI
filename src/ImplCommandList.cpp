@@ -12,6 +12,8 @@ namespace WilloRHI
     void CommandList::Begin() { impl->Begin(); }
     void ImplCommandList::Begin()
     {
+        _device.impl->_resources.resourcesMutex.lock_shared();
+
         VkCommandBufferBeginInfo beginInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .pNext = nullptr,
@@ -25,6 +27,7 @@ namespace WilloRHI
     void CommandList::End() { impl->End(); }
     void ImplCommandList::End()
     {
+        _device.impl->_resources.resourcesMutex.unlock_shared();
         vkEndCommandBuffer(_vkCommandBuffer);
     }
 
@@ -42,7 +45,7 @@ namespace WilloRHI
             .layerCount = subresourceRange.numLayers
         };
 
-        VkImage vkImage = _device->_resources.images.resources[image.id].image;
+        VkImage vkImage = _device.impl->_resources.images.resources[image.id].image;
         vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
     }
 
@@ -62,7 +65,7 @@ namespace WilloRHI
             .layerCount = barrierInfo.subresourceRange.numLayers
         };
 
-        VkImage vkImage = _device->_resources.images.resources[image.id].image;
+        VkImage vkImage = _device.impl->_resources.images.resources[image.id].image;
 
         VkImageMemoryBarrier2 imageBarrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
