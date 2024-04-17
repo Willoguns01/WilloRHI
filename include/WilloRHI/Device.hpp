@@ -37,33 +37,17 @@ namespace WilloRHI
     {
     public:
         Device() = default;
-
         static Device CreateDevice(const DeviceCreateInfo& createInfo);
 
-        void Cleanup();
+        void* GetDeviceNativeHandle() const;
+
         void WaitIdle() const;
 
-        // creation functions
-
-        BinarySemaphore CreateBinarySemaphore();
-        TimelineSemaphore CreateTimelineSemaphore(uint64_t initialValue);
+        // resources 
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
 
-        // deletion functions
-
-        void DestroyBinarySemaphore(BinarySemaphore semaphore);
-        void DestroyTimelineSemaphore(TimelineSemaphore semaphore);
-        void DestroySwapchain(Swapchain swapchain);
-
         // functionality
-
-        void WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout);
-        uint64_t GetSemaphoreValue(TimelineSemaphore semaphore);
-
-        // call at the beginning of each frame - finalises destruction of 
-        // any resources set as destroyed for that frame
-        void CollectGarbage();
 
         void LogMessage(const std::string& message, bool error = true);
         void ErrorCheck(uint64_t errorCode);

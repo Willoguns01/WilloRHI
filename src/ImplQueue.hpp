@@ -30,6 +30,9 @@ namespace WilloRHI
 
         void Init(Device device, QueueType queueType, Queue parent);
 
+        ~ImplQueue();
+        void Cleanup();
+
         CommandList GetCmdList();
 
         void Submit(const CommandSubmitInfo& submitInfo);

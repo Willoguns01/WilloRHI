@@ -32,7 +32,6 @@ namespace WilloRHI
     {
     public:
         Queue() = default;
-
         static Queue Create(Device device, QueueType queueType);
 
         CommandList GetCmdList();
@@ -40,10 +39,12 @@ namespace WilloRHI
         void Submit(const CommandSubmitInfo& submitInfo);
         void Present(const PresentInfo& presentInfo);
 
+        // call periodically - preferrably once per frame - to clear out unused resources
+        // also needs to be called before exit to prevent validation errors
+        void CollectGarbage();
+
     protected:
         friend ImplDevice;
-
-        void CollectGarbage();
 
         std::shared_ptr<ImplQueue> impl = nullptr;
     };

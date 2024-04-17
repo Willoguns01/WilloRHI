@@ -9,7 +9,7 @@ namespace WilloRHI
 {
     struct ImplSwapchain
     {
-        std::shared_ptr<ImplDevice> device = nullptr;
+        Device device;
         VkDevice vkDevice = VK_NULL_HANDLE;
         VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
 
@@ -29,6 +29,11 @@ namespace WilloRHI
         bool _needResize = false;
 
         void Init(Device device, const SwapchainCreateInfo& createInfo);
+
+        ~ImplSwapchain();
+        void Cleanup();
+
+        VkSurfaceKHR CreateSurface(NativeWindowHandle handle);
 
         ImageId AcquireNextImage();
         uint64_t GetCurrentImageIndex() const;

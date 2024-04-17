@@ -97,6 +97,22 @@ namespace WilloRHI
         return newDevice;
     }
 
+    ImplDevice::~ImplDevice() {
+        Cleanup();
+    }
+
+    void ImplDevice::Cleanup()
+    {
+        vkDestroyDescriptorSetLayout(_vkDevice, _globalDescriptors.setLayout, nullptr);
+        vkDestroyDescriptorPool(_vkDevice, _globalDescriptors.pool, nullptr);
+
+        vmaDestroyAllocator(_allocator);
+        vkDestroyDevice(_vkDevice, nullptr);
+
+        vkb::destroy_debug_utils_messenger(_vkInstance, _vkDebugMessenger);
+        vkDestroyInstance(_vkInstance, nullptr);
+    }
+
     void ImplDevice::SetupDescriptors(const ResourceCountInfo& countInfo)
     {
         _resources.buffers = ResourceMap<BufferResource>(countInfo.bufferCount);
@@ -188,80 +204,15 @@ namespace WilloRHI
         LogMessage("Loaded default resources", false);
     }
 
-    void Device::Cleanup() { impl->Cleanup(); }
-    void ImplDevice::Cleanup()
-    {
-        WaitIdle();
-
-        // above WaitIdle *should* mean all of the queues will collect everything that's pending
-        // should be safe to annihilate everything
-        CollectGarbage();
-
-        for (int i = 0; i < _deviceQueues.size(); i++) {
-            for (auto& pool : _deviceQueues.at(i).impl->_commandPools) {
-                vkDestroyCommandPool(_vkDevice, pool.second, nullptr);
-            }
-            vkDestroySemaphore(_vkDevice, _deviceQueues.at(i).impl->_submissionTimeline.impl->vkSemaphore, nullptr);
-        }
-
-        vkDestroyDescriptorSetLayout(_vkDevice, _globalDescriptors.setLayout, nullptr);
-        vkDestroyDescriptorPool(_vkDevice, _globalDescriptors.pool, nullptr);
-
-        vmaDestroyAllocator(_allocator);
-        vkDestroyDevice(_vkDevice, nullptr);
-
-        vkb::destroy_debug_utils_messenger(_vkInstance, _vkDebugMessenger);
-        vkDestroyInstance(_vkInstance, nullptr);
+    void* Device::GetDeviceNativeHandle() const { return impl->GetDeviceNativeHandle(); }
+    void* ImplDevice::GetDeviceNativeHandle() const {
+        return static_cast<void*>(_vkDevice);
     }
 
     void Device::WaitIdle() const { impl->WaitIdle(); }
     void ImplDevice::WaitIdle() const
     {
         vkDeviceWaitIdle(_vkDevice);
-    }
-
-    BinarySemaphore Device::CreateBinarySemaphore() { return impl->CreateBinarySemaphore(); }
-    BinarySemaphore ImplDevice::CreateBinarySemaphore()
-    {
-        BinarySemaphore newSemaphore = {};
-        newSemaphore.impl = std::make_shared<ImplBinarySemaphore>();
-        ImplBinarySemaphore* newImpl = newSemaphore.impl.get();
-
-        VkSemaphoreCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0
-        };
-
-        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &newImpl->vkSemaphore));
-        LogMessage("Created binary semaphore", false);
-        return newSemaphore;
-    }
-
-    TimelineSemaphore Device::CreateTimelineSemaphore(uint64_t initialValue) {
-        return impl->CreateTimelineSemaphore(initialValue); }
-    TimelineSemaphore ImplDevice::CreateTimelineSemaphore(uint64_t initialValue)
-    {
-        TimelineSemaphore newSemaphore = {};
-        newSemaphore.impl = std::make_shared<ImplTimelineSemaphore>();
-        ImplTimelineSemaphore* newImpl = newSemaphore.impl.get();
-
-        VkSemaphoreTypeCreateInfo typeInfo = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-            .pNext = nullptr,
-            .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-            .initialValue = initialValue
-        };
-
-        VkSemaphoreCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            .pNext = &typeInfo,
-            .flags = 0
-        };
-
-        ErrorCheck(vkCreateSemaphore(_vkDevice, &createInfo, nullptr, &newImpl->vkSemaphore));
-        LogMessage("Created timeline semaphore", false);
-        return newSemaphore;
     }
 
     BufferId Device::CreateBuffer(const BufferCreateInfo& createInfo) {
@@ -272,7 +223,7 @@ namespace WilloRHI
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .size = createInfo.size,
+            .size = 0,
             .usage = BUFFER_USAGE_FLAGS,
             // apparently concurrent sharing mode has no affect with buffers?
             // need to test this vs. exclusive sharing with queue ownership transfer
@@ -286,119 +237,6 @@ namespace WilloRHI
         };
 
         return {};
-    }
-
-    void Device::DestroyBinarySemaphore(BinarySemaphore semaphore) {
-        impl->DestroyBinarySemaphore(semaphore); }
-    void ImplDevice::DestroyBinarySemaphore(BinarySemaphore semaphore) {
-        vkDestroySemaphore(_vkDevice, semaphore.impl->vkSemaphore, nullptr);
-    }
-
-    void Device::DestroyTimelineSemaphore(TimelineSemaphore semaphore) {
-        impl->DestroyTimelineSemaphore(semaphore); }
-    void ImplDevice::DestroyTimelineSemaphore(TimelineSemaphore semaphore) {
-        vkDestroySemaphore(_vkDevice, semaphore.impl->vkSemaphore, nullptr);
-    }
-
-    void Device::DestroySwapchain(Swapchain swapchain) {
-        impl->DestroySwapchain(swapchain); }
-    void ImplDevice::DestroySwapchain(Swapchain swapchain)
-    {
-        for (int i = 0; i < swapchain.impl->_framesInFlight; i++) {
-            _resources.images.freeSlotQueue.enqueue(swapchain.impl->_images.at(i).id);
-        }
-
-        vkDestroySwapchainKHR(_vkDevice, swapchain.impl->_vkSwapchain, nullptr);
-        vkDestroySurfaceKHR(_vkInstance, swapchain.impl->_vkSurface, nullptr);
-
-        for (int i = 0; i < swapchain.impl->_framesInFlight; i++) {
-            DestroyBinarySemaphore(swapchain.impl->_imageSync[i]);
-        }
-    }
-
-    void Device::WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout) {
-        impl->WaitSemaphore(semaphore, value, timeout); }
-    void ImplDevice::WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout)
-    {
-        VkSemaphoreWaitInfo waitInfo = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-            .pNext = nullptr,
-            .semaphoreCount = 1,
-            .pSemaphores = &semaphore.impl->vkSemaphore,
-            .pValues = &value
-        };
-
-        ErrorCheck(vkWaitSemaphores(_vkDevice, &waitInfo, timeout));
-    }
-
-    uint64_t Device::GetSemaphoreValue(TimelineSemaphore semaphore) {
-        return impl->GetSemaphoreValue(semaphore); }
-    uint64_t ImplDevice::GetSemaphoreValue(TimelineSemaphore semaphore)
-    {
-        uint64_t result = 0;
-        ErrorCheck(vkGetSemaphoreCounterValue(_vkDevice, semaphore.impl->vkSemaphore, &result));
-        return result;
-    }
-
-    void Device::CollectGarbage() { impl->CollectGarbage(); }
-    void ImplDevice::CollectGarbage()
-    {
-        std::unique_lock<std::shared_mutex> lock(_resources.resourcesMutex);
-
-        for (int i = 0; i < _deviceQueues.size(); i++) {
-            _deviceQueues.at(i).CollectGarbage();
-        }
-    }
-
-    VkSurfaceKHR ImplDevice::CreateSurface(NativeWindowHandle handle)
-    {
-        VkSurfaceKHR newSurface = VK_NULL_HANDLE;
-        
-#ifdef _WIN32
-        VkWin32SurfaceCreateInfoKHR surfaceInfo = {
-            .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-            .pNext = nullptr,
-            .flags = 0,
-            .hinstance = GetModuleHandleA(nullptr),
-            .hwnd = static_cast<HWND>(handle)
-        };
-
-        ErrorCheck(vkCreateWin32SurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
-        LogMessage("Created Win32 window surface", false);
-#endif
-
-        // I have no idea if this linux stuff works, need to check
-#ifdef __linux__
-#ifdef WilloRHI_BUILD_WAYLAND
-        if (std::getenv("WAYLAND_DISPLAY")) {
-            VkWaylandSurfaceCreateInfoKHR surfaceInfo = {
-                .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
-                .pNext = nullptr,
-                .flags = 0,
-                .display = wl_display_connect(nullptr),
-                .surface = static_cast<wl_surface*>(handle)
-            };
-
-            ErrorCheck(vkCreateWaylandSurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
-            LogMessage("Created Wayland window surface", false);
-        }
-#endif
-#ifdef WilloRHI_BUILD_X11
-        if (std::getenv("DISPLAY")) {
-            VkXlibSurfaceCreateInfoKHR surfaceInfo = {
-                .sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
-                .pNext = nullptr,
-                .flags = 0,
-                .dpy = XOpenDisplay(nullptr),
-                .window = reinterpret_cast<Window>(handle),
-            };
-
-            ErrorCheck(vkCreateXlibSurfaceKHR(_vkInstance, &surfaceInfo, nullptr, &newSurface));
-            LogMessage("Created X11 window surface", false);
-        }
-#endif
-#endif
-        return newSurface;
     }
 
     void Device::LogMessage(const std::string& message, bool error) {

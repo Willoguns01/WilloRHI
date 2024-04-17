@@ -124,7 +124,6 @@ namespace WilloRHI
         vkb::SystemInfo _sysInfo = vkb::SystemInfo::get_system_info().value();
 
         uint32_t _vkQueueIndices[3] = {0,0,0};
-        std::vector<Queue> _deviceQueues;
 
         DeviceResources _resources;
         GlobalDescriptors _globalDescriptors;
@@ -136,37 +135,23 @@ namespace WilloRHI
 
         void Init(const DeviceCreateInfo& createInfo);
 
+        ~ImplDevice();
+        void Cleanup();
+
         void SetupDescriptors(const ResourceCountInfo& countInfo);
         void SetupDefaultResources();
 
-        void Cleanup();
+        void* GetDeviceNativeHandle() const;
+
         void WaitIdle() const;
 
-        // creation functions
-
-        BinarySemaphore CreateBinarySemaphore();
-        TimelineSemaphore CreateTimelineSemaphore(uint64_t initialValue);
+        // resources
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
 
-        // deletion functions
-
-        void DestroyBinarySemaphore(BinarySemaphore semaphore);
-        void DestroyTimelineSemaphore(TimelineSemaphore semaphore);
-        void DestroySwapchain(Swapchain swapchain);
-
         // functionality
-
-        void WaitSemaphore(TimelineSemaphore semaphore, uint64_t value, uint64_t timeout);
-        uint64_t GetSemaphoreValue(TimelineSemaphore semaphore);
-
-        // call at the beginning of each frame - finalises destruction of 
-        // any resources set as destroyed for that frame
-        void CollectGarbage();
 
         void LogMessage(const std::string& message, bool error = true);
         void ErrorCheck(uint64_t errorCode);
-
-        VkSurfaceKHR CreateSurface(NativeWindowHandle handle);
     };
 }

@@ -23,8 +23,6 @@ namespace WilloRHI
         _vkDevice = device.impl->_vkDevice;
         vkb::Device vkbDevice = device.impl->_vkbDevice;
 
-        device.impl->_deviceQueues.push_back(parent);
-
         if (queueType == QueueType::GRAPHICS) {
             // this is the graphics queue! whoa!
             // the client should only ever make one of these
@@ -58,9 +56,19 @@ namespace WilloRHI
         _vkQueue = vkbDevice.get_queue(vkbType).value();
         _vkQueueIndex = vkbDevice.get_queue_index(vkbType).value();
 
-        _submissionTimeline = device.CreateTimelineSemaphore(0);
+        _submissionTimeline = WilloRHI::TimelineSemaphore::Create(_device, 0);
 
         device.LogMessage("Created queue of type " + _queueStr, false);
+    }
+
+    ImplQueue::~ImplQueue() {
+        Cleanup();
+    }
+
+    void ImplQueue::Cleanup() {
+        for (auto it : _commandPools) {
+            vkDestroyCommandPool(_vkDevice, it.second, nullptr);
+        }
     }
 
     CommandList Queue::GetCmdList() { return impl->GetCmdList(); }
@@ -187,12 +195,6 @@ namespace WilloRHI
     void Queue::Present(const PresentInfo& presentInfo) { impl->Present(presentInfo); }
     void ImplQueue::Present(const PresentInfo& presentInfo)
     {
-        if (_queueType != QueueType::GRAPHICS) {
-            // what the fuck are you even trying to accomplish?
-            _device.LogMessage("Only a graphics queue can be used for presentation");
-            return;
-        }
-
         std::vector<VkSemaphore> waitSemaphores;
         for (int i = 0; i < presentInfo.waitSemaphores.size(); i++) {
             waitSemaphores.push_back(presentInfo.waitSemaphores[i].impl->vkSemaphore);
@@ -221,7 +223,7 @@ namespace WilloRHI
     void Queue::CollectGarbage() { impl->CollectGarbage(); }
     void ImplQueue::CollectGarbage()
     {
-        uint64_t gpuTimeline = _device.GetSemaphoreValue(_submissionTimeline);
+        uint64_t gpuTimeline = _submissionTimeline.GetValue();
 
         while (!_pendingCommandLists.empty()) {
             std::pair<uint64_t, CommandList> cmdPair = _pendingCommandLists.front();

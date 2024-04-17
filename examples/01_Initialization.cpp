@@ -32,21 +32,21 @@ int main()
         .samplerCount = 32
     };
 
-    //WilloRHI::DeviceCreateInfo deviceInfo = {
-    //    .applicationName = "01_Initialization",
-    //    .validationLayers = true,
-    //    .logCallback = &OutputMessage,
-    //    .logInfo = true,
-    //    .resourceCounts = countInfo
-    //};
-
     WilloRHI::DeviceCreateInfo deviceInfo = {
         .applicationName = "01_Initialization",
-        .validationLayers = false,
-        .logCallback = nullptr,
-        .logInfo = false,
+        .validationLayers = true,
+        .logCallback = &OutputMessage,
+        .logInfo = true,
         .resourceCounts = countInfo
     };
+
+    //WilloRHI::DeviceCreateInfo deviceInfo = {
+    //    .applicationName = "01_Initialization",
+    //    .validationLayers = false,
+    //    .logCallback = nullptr,
+    //    .logInfo = false,
+    //    .resourceCounts = countInfo
+    //};
 
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
@@ -63,14 +63,14 @@ int main()
 
     std::vector<WilloRHI::BinarySemaphore> renderSemaphores;
     for (int i = 0; i < FRAME_OVERLAP; i++) {
-        renderSemaphores.push_back(device.CreateBinarySemaphore());
+        renderSemaphores.push_back(WilloRHI::BinarySemaphore::Create(device));
     }
 
-    WilloRHI::TimelineSemaphore gpuTimeline = device.CreateTimelineSemaphore(0);
-    uint64_t frameNum = 0;
+    WilloRHI::TimelineSemaphore gpuTimeline = WilloRHI::TimelineSemaphore::Create(device, FRAME_OVERLAP);
+    uint64_t frameNum = FRAME_OVERLAP;
 
     WilloRHI::Queue graphicsQueue = WilloRHI::Queue::Create(device, WilloRHI::QueueType::GRAPHICS);
-
+    
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
@@ -86,29 +86,35 @@ int main()
             continue;
         }
 
-        device.WaitSemaphore(gpuTimeline, frameNum, 1000000000);
+        gpuTimeline.WaitValue(frameNum - (FRAME_OVERLAP - 1), 1000000000);
+        frameNum += 1;
         WilloRHI::ImageId swapchainImage = swapchain.AcquireNextImage();
 
-        frameNum += 1;
         WilloRHI::CommandList cmdList = graphicsQueue.GetCmdList();
         cmdList.Begin();
 
         WilloRHI::ImageMemoryBarrierInfo barrierInfo = {
             .srcStage = WilloRHI::PipelineStage::ALL_COMMANDS_BIT,
-            .dstStage = WilloRHI::PipelineStage::ALL_COMMANDS_BIT,
-            .srcAccess = WilloRHI::MemoryAccess::WRITE,
-            .dstAccess = WilloRHI::MemoryAccess::READ | WilloRHI::MemoryAccess::WRITE,
+            .dstStage = WilloRHI::PipelineStage::CLEAR_BIT,
+            .srcAccess = WilloRHI::MemoryAccess::READ,
+            .dstAccess = WilloRHI::MemoryAccess::WRITE,
             .srcLayout = WilloRHI::ImageLayout::UNDEFINED,
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
             .subresourceRange = {}
         };
-
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
+
         float clearColour[] = { 0.1f, 0.1f, 0.1f, 1.0f };
         cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
 
-        barrierInfo.srcLayout = WilloRHI::ImageLayout::GENERAL;
-        barrierInfo.dstLayout = WilloRHI::ImageLayout::PRESENT_SRC;
+        barrierInfo = {
+            .srcStage = WilloRHI::PipelineStage::CLEAR_BIT,
+            .dstStage = WilloRHI::PipelineStage::ALL_COMMANDS_BIT,
+            .srcAccess = WilloRHI::MemoryAccess::WRITE,
+            .dstAccess = WilloRHI::MemoryAccess::READ,
+            .srcLayout = WilloRHI::ImageLayout::GENERAL,
+            .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
+        };
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
         
         cmdList.End();
@@ -128,18 +134,11 @@ int main()
         };
 
         graphicsQueue.Present(presentInfo);
-        device.CollectGarbage();
+        graphicsQueue.CollectGarbage();
     }
 
     device.WaitIdle();
-
-    for (int i = 0; i < FRAME_OVERLAP; i++) {
-        device.DestroyBinarySemaphore(renderSemaphores.at(i));
-    }
-    device.DestroyTimelineSemaphore(gpuTimeline);
-
-    device.DestroySwapchain(swapchain);
-    device.Cleanup();
+    graphicsQueue.CollectGarbage();
 
     glfwDestroyWindow(window);
     glfwTerminate();

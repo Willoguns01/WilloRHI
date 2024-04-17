@@ -23,9 +23,8 @@ namespace WilloRHI
     class Swapchain
     {
     public:
-        static Swapchain Create(Device device, const SwapchainCreateInfo& createInfo);
-
         Swapchain() = default;
+        static Swapchain Create(Device device, const SwapchainCreateInfo& createInfo);
 
         ImageId AcquireNextImage();
         uint64_t GetCurrentImageIndex() const;
