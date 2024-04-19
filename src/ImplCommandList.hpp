@@ -25,8 +25,8 @@ namespace WilloRHI
 
         void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
     
-        void* GetNativeHandle();
-        std::thread::id GetThreadId();
+        void* GetNativeHandle() const;
+        std::thread::id GetThreadId() const;
         void* GetDeletionQueue();
     };
 }

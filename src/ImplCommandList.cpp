@@ -83,13 +83,13 @@ namespace WilloRHI
         vkCmdPipelineBarrier2(_vkCommandBuffer, &depInfo);
     }
 
-    void* CommandList::GetNativeHandle() { return impl->GetNativeHandle(); }
-    void* ImplCommandList::GetNativeHandle() {
+    void* CommandList::GetNativeHandle() const { return impl->GetNativeHandle(); }
+    void* ImplCommandList::GetNativeHandle() const {
         return static_cast<void*>(_vkCommandBuffer);
     }
 
-    std::thread::id CommandList::GetThreadId() { return impl->GetThreadId(); }
-    std::thread::id ImplCommandList::GetThreadId() {
+    std::thread::id CommandList::GetThreadId() const { return impl->GetThreadId(); }
+    std::thread::id ImplCommandList::GetThreadId() const {
         return _threadId;
     }
 

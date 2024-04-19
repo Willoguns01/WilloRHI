@@ -40,6 +40,7 @@ namespace WilloRHI
         static Device CreateDevice(const DeviceCreateInfo& createInfo);
 
         void* GetDeviceNativeHandle() const;
+        void* GetPhysicalDeviceNativeHandle() const;
         void* GetInstanceNativeHandle() const;
 
         void WaitIdle() const;
@@ -64,12 +65,12 @@ namespace WilloRHI
         void LockResources();
         void UnlockResources();
 
-        void* GetBufferNativeHandle(BufferId handle);
-        void* GetImageNativeHandle(ImageId handle);
-        void* GetImageViewNativeHandle(ImageViewId handle);
-        void* GetSamplerNativeHandle(SamplerId handle);
+        void* GetBufferNativeHandle(BufferId handle) const;
+        void* GetImageNativeHandle(ImageId handle) const;
+        void* GetImageViewNativeHandle(ImageViewId handle) const;
+        void* GetSamplerNativeHandle(SamplerId handle) const;
 
         void* GetDeviceResources();
-        void* GetAllocator();
+        void* GetAllocator() const;
     };
 }

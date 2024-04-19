@@ -64,7 +64,7 @@ namespace WilloRHI
             return newSlot;
         }
 
-        Resource_T& At(uint64_t index) {
+        Resource_T& At(uint64_t index) const {
             return resources[index];
         }
 

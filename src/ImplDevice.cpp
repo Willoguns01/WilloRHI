@@ -198,6 +198,11 @@ namespace WilloRHI
         return static_cast<void*>(_vkDevice);
     }
 
+    void* Device::GetPhysicalDeviceNativeHandle() const { return impl->GetPhysicalDeviceNativeHandle(); }
+    void* ImplDevice::GetPhysicalDeviceNativeHandle() const {
+        return static_cast<void*>(_vkPhysicalDevice);
+    }
+
     void* Device::GetInstanceNativeHandle() const { return impl->GetInstanceNativeHandle(); }
     void* ImplDevice::GetInstanceNativeHandle() const {
         return static_cast<void*>(_vkInstance);
@@ -281,23 +286,23 @@ namespace WilloRHI
         _resources.resourcesMutex.unlock();
     }
 
-    void* Device::GetBufferNativeHandle(BufferId handle) { return impl->GetBufferNativeHandle(handle); }
-    void* ImplDevice::GetBufferNativeHandle(BufferId handle) {
+    void* Device::GetBufferNativeHandle(BufferId handle) const { return impl->GetBufferNativeHandle(handle); }
+    void* ImplDevice::GetBufferNativeHandle(BufferId handle) const {
         return static_cast<void*>(_resources.buffers.At(handle.id).buffer);
     }
     
-    void* Device::GetImageNativeHandle(ImageId handle) { return impl->GetImageNativeHandle(handle); }
-    void* ImplDevice::GetImageNativeHandle(ImageId handle) {
+    void* Device::GetImageNativeHandle(ImageId handle) const { return impl->GetImageNativeHandle(handle); }
+    void* ImplDevice::GetImageNativeHandle(ImageId handle) const {
         return static_cast<void*>(_resources.images.At(handle.id).image);
     }
 
-    void* Device::GetImageViewNativeHandle(ImageViewId handle) { return impl->GetImageViewNativeHandle(handle); }
-    void* ImplDevice::GetImageViewNativeHandle(ImageViewId handle) {
+    void* Device::GetImageViewNativeHandle(ImageViewId handle) const { return impl->GetImageViewNativeHandle(handle); }
+    void* ImplDevice::GetImageViewNativeHandle(ImageViewId handle) const {
         return static_cast<void*>(_resources.imageViews.At(handle.id).imageView);
     }
     
-    void* Device::GetSamplerNativeHandle(SamplerId handle) { return impl->GetSamplerNativeHandle(handle); }
-    void* ImplDevice::GetSamplerNativeHandle(SamplerId handle) {
+    void* Device::GetSamplerNativeHandle(SamplerId handle) const { return impl->GetSamplerNativeHandle(handle); }
+    void* ImplDevice::GetSamplerNativeHandle(SamplerId handle) const {
         return static_cast<void*>(_resources.samplers.At(handle.id).sampler);
     }
 
@@ -306,8 +311,8 @@ namespace WilloRHI
         return static_cast<void*>(&_resources);
     }
 
-    void* Device::GetAllocator() { return impl->GetAllocator(); }
-    void* ImplDevice::GetAllocator() {
+    void* Device::GetAllocator() const { return impl->GetAllocator(); }
+    void* ImplDevice::GetAllocator() const {
         return static_cast<void*>(_allocator);
     }
 }

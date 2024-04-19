@@ -14,13 +14,12 @@
 #endif
 
 #include "ImplSwapchain.hpp"
-#include "ImplDevice.hpp"
-
-#include "WilloRHI/Resources.hpp"
+#include "ImplResources.hpp"
 
 #include <VkBootstrap.h>
 
-#include "ImplSync.hpp"
+#include "WilloRHI/Sync.hpp"
+//#include "ImplSync.hpp"
 
 namespace WilloRHI
 {
@@ -36,8 +35,8 @@ namespace WilloRHI
     {
         device = pDevice;
 
-        vkDevice = device.impl->_vkDevice;
-        vkPhysicalDevice = device.impl->_vkPhysicalDevice;
+        vkDevice = (VkDevice)device.GetDeviceNativeHandle();
+        vkPhysicalDevice = (VkPhysicalDevice)device.GetPhysicalDeviceNativeHandle();
 
         _vkSurface = CreateSurface(createInfo.windowHandle);
 
@@ -61,10 +60,12 @@ namespace WilloRHI
 
         _images.reserve((size_t)createInfo.framesInFlight);
 
+        DeviceResources* resources = (DeviceResources*)device.GetDeviceResources();
+
         for (uint32_t i = 0; i < createInfo.framesInFlight; i++)
         {
-            uint64_t imageId = device.impl->_resources.images.Allocate();
-            device.impl->_resources.images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
+            uint64_t imageId = resources->images.Allocate();
+            resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
             _images.push_back(ImageId{.id = imageId});
 
             _imageSync.push_back(WilloRHI::BinarySemaphore::Create(pDevice));
@@ -78,12 +79,13 @@ namespace WilloRHI
     }
 
     void ImplSwapchain::Cleanup() {
+        DeviceResources* resources = (DeviceResources*)device.GetDeviceResources();
         for (int i = 0; i < _framesInFlight; i++) {
-            device.impl->_resources.images.freeSlotQueue.enqueue(_images.at(i).id);
+            resources->images.freeSlotQueue.enqueue(_images.at(i).id);
         }
 
         vkDestroySwapchainKHR(vkDevice, _vkSwapchain, nullptr);
-        vkDestroySurfaceKHR(device.impl->_vkInstance, _vkSurface, nullptr);
+        vkDestroySurfaceKHR((VkInstance)device.GetInstanceNativeHandle(), _vkSurface, nullptr);
     }
 
     VkSurfaceKHR ImplSwapchain::CreateSurface(NativeWindowHandle handle)
@@ -99,7 +101,7 @@ namespace WilloRHI
             .hwnd = static_cast<HWND>(handle)
         };
 
-        device.ErrorCheck(vkCreateWin32SurfaceKHR(device.impl->_vkInstance, &surfaceInfo, nullptr, &newSurface));
+        device.ErrorCheck(vkCreateWin32SurfaceKHR((VkInstance)device.GetInstanceNativeHandle(), &surfaceInfo, nullptr, &newSurface));
         device.LogMessage("Created Win32 window surface", false);
 #endif
 
@@ -114,7 +116,7 @@ namespace WilloRHI
                 .surface = static_cast<wl_surface*>(handle)
             };
 
-            ErrorCheck(vkCreateWaylandSurfaceKHR(device.impl->_vkInstance, &surfaceInfo, nullptr, &newSurface));
+            ErrorCheck(vkCreateWaylandSurfaceKHR((VkInstance)device.GetInstanceNativeHandle(), &surfaceInfo, nullptr, &newSurface));
             LogMessage("Created Wayland window surface", false);
         }
 #endif
@@ -128,7 +130,7 @@ namespace WilloRHI
                 .window = reinterpret_cast<Window>(handle),
             };
 
-            ErrorCheck(vkCreateXlibSurfaceKHR(device.impl->_vkInstance, &surfaceInfo, nullptr, &newSurface));
+            ErrorCheck(vkCreateXlibSurfaceKHR((VkInstance)device.GetInstanceNativeHandle(), &surfaceInfo, nullptr, &newSurface));
             LogMessage("Created X11 window surface", false);
         }
 #endif
@@ -144,7 +146,7 @@ namespace WilloRHI
             vkDevice,
             _vkSwapchain,
             1000000000,
-            _imageSync[_frameNum % _framesInFlight].impl->vkSemaphore,
+            (VkSemaphore)_imageSync[_frameNum % _framesInFlight].GetNativeHandle(),
             nullptr,
             &_currentImageIndex
         );
@@ -198,20 +200,22 @@ namespace WilloRHI
 
         std::vector<VkImage> vkImages = vkbSwapchain.get_images().value();
 
+        DeviceResources* resources = (DeviceResources*)device.GetDeviceResources();
+
         for (int32_t i = 0; i < _framesInFlight; i++)
         {
-            device.impl->_resources.images.Free(_images.at(i).id);
-            uint64_t imageId = device.impl->_resources.images.Allocate();
+            resources->images.Free(_images.at(i).id);
+            uint64_t imageId = resources->images.Allocate();
 
-            device.impl->_resources.images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
+            resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
             _images.at(i) = ImageId{.id = imageId};
         }
 
         device.LogMessage("Resized swapchain", false);
     }
 
-    void* Swapchain::GetNativeHandle() { return impl->GetNativeHandle(); }
-    void* ImplSwapchain::GetNativeHandle() {
+    void* Swapchain::GetNativeHandle() const { return impl->GetNativeHandle(); }
+    void* ImplSwapchain::GetNativeHandle() const {
         return static_cast<void*>(_vkSwapchain);
     }
 

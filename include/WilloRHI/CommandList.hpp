@@ -47,8 +47,8 @@ namespace WilloRHI
 
         CommandList(Device device, std::thread::id threadId, void* nativeHandle);
 
-        void* GetNativeHandle();
-        std::thread::id GetThreadId();
+        void* GetNativeHandle() const;
+        std::thread::id GetThreadId() const;
         void* GetDeletionQueue();
     };
 }
