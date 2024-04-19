@@ -1,10 +1,4 @@
-#include "WilloRHI/WilloRHI.hpp"
-
 #include "ImplDevice.hpp"
-#include "ImplSwapchain.hpp"
-#include "ImplSync.hpp"
-#include "ImplCommandList.hpp"
-#include "ImplQueue.hpp"
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
@@ -77,11 +71,6 @@ namespace WilloRHI
         _vkQueueIndices[0] = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
         _vkQueueIndices[1] = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
         _vkQueueIndices[2] = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
-
-        _resources.images.device = this;
-        _resources.imageViews.device = this;
-        _resources.samplers.device = this;
-        _resources.buffers.device = this;
 
         LogMessage("Initialised Device", false);
         
@@ -209,6 +198,11 @@ namespace WilloRHI
         return static_cast<void*>(_vkDevice);
     }
 
+    void* Device::GetInstanceNativeHandle() const { return impl->GetInstanceNativeHandle(); }
+    void* ImplDevice::GetInstanceNativeHandle() const {
+        return static_cast<void*>(_vkInstance);
+    }
+
     void Device::WaitIdle() const { impl->WaitIdle(); }
     void ImplDevice::WaitIdle() const
     {
@@ -265,5 +259,55 @@ namespace WilloRHI
         if (result != VK_SUCCESS && _loggingCallback) {
             LogMessage(std::string("Vulkan Error: ") + std::string(string_VkResult(result)));
         }
+    }
+
+    void Device::LockResources_Shared() { impl->LockResources_Shared(); }
+    void ImplDevice::LockResources_Shared() {
+        _resources.resourcesMutex.lock_shared();
+    }
+
+    void Device::UnlockResources_Shared() { impl->UnlockResources_Shared(); }
+    void ImplDevice::UnlockResources_Shared() {
+        _resources.resourcesMutex.unlock_shared();
+    }
+
+    void Device::LockResources() { impl->LockResources(); }
+    void ImplDevice::LockResources() {
+        _resources.resourcesMutex.lock();
+    }
+
+    void Device::UnlockResources() { impl->UnlockResources(); }
+    void ImplDevice::UnlockResources() {
+        _resources.resourcesMutex.unlock();
+    }
+
+    void* Device::GetBufferNativeHandle(BufferId handle) { return impl->GetBufferNativeHandle(handle); }
+    void* ImplDevice::GetBufferNativeHandle(BufferId handle) {
+        return static_cast<void*>(_resources.buffers.At(handle.id).buffer);
+    }
+    
+    void* Device::GetImageNativeHandle(ImageId handle) { return impl->GetImageNativeHandle(handle); }
+    void* ImplDevice::GetImageNativeHandle(ImageId handle) {
+        return static_cast<void*>(_resources.images.At(handle.id).image);
+    }
+
+    void* Device::GetImageViewNativeHandle(ImageViewId handle) { return impl->GetImageViewNativeHandle(handle); }
+    void* ImplDevice::GetImageViewNativeHandle(ImageViewId handle) {
+        return static_cast<void*>(_resources.imageViews.At(handle.id).imageView);
+    }
+    
+    void* Device::GetSamplerNativeHandle(SamplerId handle) { return impl->GetSamplerNativeHandle(handle); }
+    void* ImplDevice::GetSamplerNativeHandle(SamplerId handle) {
+        return static_cast<void*>(_resources.samplers.At(handle.id).sampler);
+    }
+
+    void* Device::GetDeviceResources() { return impl->GetDeviceResources(); }
+    void* ImplDevice::GetDeviceResources() {
+        return static_cast<void*>(&_resources);
+    }
+
+    void* Device::GetAllocator() { return impl->GetAllocator(); }
+    void* ImplDevice::GetAllocator() {
+        return static_cast<void*>(_allocator);
     }
 }

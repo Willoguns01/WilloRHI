@@ -40,6 +40,7 @@ namespace WilloRHI
         static Device CreateDevice(const DeviceCreateInfo& createInfo);
 
         void* GetDeviceNativeHandle() const;
+        void* GetInstanceNativeHandle() const;
 
         void WaitIdle() const;
 
@@ -57,5 +58,18 @@ namespace WilloRHI
         friend ImplQueue;
         friend ImplCommandList;
         std::shared_ptr<ImplDevice> impl = nullptr;
+
+        void LockResources_Shared();
+        void UnlockResources_Shared();
+        void LockResources();
+        void UnlockResources();
+
+        void* GetBufferNativeHandle(BufferId handle);
+        void* GetImageNativeHandle(ImageId handle);
+        void* GetImageViewNativeHandle(ImageViewId handle);
+        void* GetSamplerNativeHandle(SamplerId handle);
+
+        void* GetDeviceResources();
+        void* GetAllocator();
     };
 }

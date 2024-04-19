@@ -1,7 +1,10 @@
 #pragma once
 
 #include "WilloRHI/CommandList.hpp"
-#include "ImplDevice.hpp"
+#include "WilloRHI/Device.hpp"
+
+#include "ImplResources.hpp"
+
 #include <vulkan/vulkan.h>
 
 namespace WilloRHI
@@ -15,13 +18,15 @@ namespace WilloRHI
 
         DeletionQueues _deletionQueues;
 
-        void Reset();
-
         void Begin();
         void End();
 
         void ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange);
 
         void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
+    
+        void* GetNativeHandle();
+        std::thread::id GetThreadId();
+        void* GetDeletionQueue();
     };
 }

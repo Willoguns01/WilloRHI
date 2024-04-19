@@ -42,5 +42,8 @@ namespace WilloRHI
 
         bool NeedsResize() const;
         void Resize(uint32_t width, uint32_t height, PresentMode presentMode);
+
+        void* GetNativeHandle();
+        void SetNeedsResize(bool value);
     };
 }

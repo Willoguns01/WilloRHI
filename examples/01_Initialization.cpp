@@ -32,28 +32,28 @@ int main()
         .samplerCount = 32
     };
 
-    WilloRHI::DeviceCreateInfo deviceInfo = {
-        .applicationName = "01_Initialization",
-        .validationLayers = true,
-        .logCallback = &OutputMessage,
-        .logInfo = true,
-        .resourceCounts = countInfo
-    };
-
     //WilloRHI::DeviceCreateInfo deviceInfo = {
     //    .applicationName = "01_Initialization",
-    //    .validationLayers = false,
-    //    .logCallback = nullptr,
-    //    .logInfo = false,
+    //    .validationLayers = true,
+    //    .logCallback = &OutputMessage,
+    //    .logInfo = true,
     //    .resourceCounts = countInfo
     //};
+
+    WilloRHI::DeviceCreateInfo deviceInfo = {
+        .applicationName = "01_Initialization",
+        .validationLayers = false,
+        .logCallback = nullptr,
+        .logInfo = false,
+        .resourceCounts = countInfo
+    };
 
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
+        .presentMode = WilloRHI::PresentMode::MAILBOX,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
@@ -116,7 +116,7 @@ int main()
             .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
         };
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
-        
+
         cmdList.End();
 
         WilloRHI::CommandSubmitInfo submitInfo = {

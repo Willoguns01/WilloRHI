@@ -209,4 +209,14 @@ namespace WilloRHI
 
         device.LogMessage("Resized swapchain", false);
     }
+
+    void* Swapchain::GetNativeHandle() { return impl->GetNativeHandle(); }
+    void* ImplSwapchain::GetNativeHandle() {
+        return static_cast<void*>(_vkSwapchain);
+    }
+
+    void Swapchain::SetNeedsResize(bool value) { impl->SetNeedsResize(value); }
+    void ImplSwapchain::SetNeedsResize(bool value) {
+        _needResize = value;
+    }
 }

@@ -1,11 +1,12 @@
-#include "ImplSwapchain.hpp"
 #include "ImplQueue.hpp"
-#include "ImplDevice.hpp"
-#include "ImplCommandList.hpp"
+#include "ImplResources.hpp"
 
-#include "ImplSync.hpp"
+#include "WilloRHI/Sync.hpp"
 
 #include <VkBootstrap.h>
+
+// TODO: can remove once we get rid of VkBootstrap
+#include "ImplDevice.hpp"
 
 namespace WilloRHI
 {
@@ -20,14 +21,10 @@ namespace WilloRHI
     void ImplQueue::Init(Device device, QueueType queueType, Queue parent)
     {
         _device = device;
-        _vkDevice = device.impl->_vkDevice;
-        vkb::Device vkbDevice = device.impl->_vkbDevice;
+        _vkDevice = static_cast<VkDevice>(device.GetDeviceNativeHandle());
 
-        if (queueType == QueueType::GRAPHICS) {
-            // this is the graphics queue! whoa!
-            // the client should only ever make one of these
-            // make sure the device knows about it, for deletion queue purposes
-        }
+        // TODO: remove once we get rid of VkBootstrap
+        vkb::Device vkbDevice = device.impl->_vkbDevice;
 
         vkb::QueueType vkbType;
 
@@ -99,8 +96,6 @@ namespace WilloRHI
 
         CommandList commandList;
         if (!map->at(threadId).try_dequeue(commandList)) {
-            commandList.impl = std::make_shared<ImplCommandList>();
-
             VkCommandBufferAllocateInfo allocInfo = {
                 .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                 .pNext = nullptr,
@@ -109,10 +104,11 @@ namespace WilloRHI
                 .commandBufferCount = 1
             };
 
-            _device.ErrorCheck(vkAllocateCommandBuffers(_vkDevice, &allocInfo, &commandList.impl->_vkCommandBuffer));
-        
-            commandList.impl->_device = _device;
-            commandList.impl->_threadId = std::this_thread::get_id();
+            VkCommandBuffer tempHandle = VK_NULL_HANDLE;
+
+            _device.ErrorCheck(vkAllocateCommandBuffers(_vkDevice, &allocInfo, &tempHandle));
+
+            commandList = CommandList(_device, std::this_thread::get_id(), (void*)tempHandle);
 
             _device.LogMessage("Allocated CommandList for thread " + std::to_string(std::hash<std::thread::id>()(threadId)), false);
         }
@@ -127,7 +123,9 @@ namespace WilloRHI
         std::vector<VkCommandBuffer> cmdBuffers;
 
         for (int i = 0; i < commandListCount; i++) {
-            cmdBuffers.push_back(submitInfo.commandLists.at(i).impl->_vkCommandBuffer);
+            CommandList cmdList = submitInfo.commandLists.at(i);
+            VkCommandBuffer vkBuf = static_cast<VkCommandBuffer>(cmdList.GetNativeHandle());
+            cmdBuffers.push_back(vkBuf);
         }
 
         std::vector<VkSemaphore> waitSemaphores;
@@ -137,30 +135,30 @@ namespace WilloRHI
         std::vector<uint64_t> signalValues;
 
         for (int i = 0; i < submitInfo.waitTimelineSemaphores.size(); i++) {
-            waitSemaphores.push_back(submitInfo.waitTimelineSemaphores[i].first.impl->vkSemaphore);
+            waitSemaphores.push_back((VkSemaphore)submitInfo.waitTimelineSemaphores[i].first.GetNativeHandle());
             waitValues.push_back(submitInfo.waitTimelineSemaphores[i].second);
             waitStageFlags.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
         }
 
         for (int i = 0; i < submitInfo.waitBinarySemaphores.size(); i++) {
-            waitSemaphores.push_back(submitInfo.waitBinarySemaphores[i].impl->vkSemaphore);
+            waitSemaphores.push_back((VkSemaphore)submitInfo.waitBinarySemaphores[i].GetNativeHandle());
             waitValues.push_back(0);
             waitStageFlags.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
         }
 
         for (int i = 0; i < submitInfo.signalTimelineSemaphores.size(); i++) {
-            signalSemaphores.push_back(submitInfo.signalTimelineSemaphores[i].first.impl->vkSemaphore);
+            signalSemaphores.push_back((VkSemaphore)submitInfo.signalTimelineSemaphores[i].first.GetNativeHandle());
             signalValues.push_back(submitInfo.signalTimelineSemaphores[i].second);
         }
 
         for (int i = 0; i < submitInfo.signalBinarySemaphores.size(); i++) {
-            signalSemaphores.push_back(submitInfo.signalBinarySemaphores[i].impl->vkSemaphore);
+            signalSemaphores.push_back((VkSemaphore)submitInfo.signalBinarySemaphores[i].GetNativeHandle());
             signalValues.push_back(0);
         }
 
         // submission timeline value
         _timelineValue += 1;
-        signalSemaphores.push_back(_submissionTimeline.impl->vkSemaphore);
+        signalSemaphores.push_back((VkSemaphore)_submissionTimeline.GetNativeHandle());
         signalValues.push_back(_timelineValue);
 
         // for garbage collection later
@@ -197,10 +195,13 @@ namespace WilloRHI
     {
         std::vector<VkSemaphore> waitSemaphores;
         for (int i = 0; i < presentInfo.waitSemaphores.size(); i++) {
-            waitSemaphores.push_back(presentInfo.waitSemaphores[i].impl->vkSemaphore);
+            waitSemaphores.push_back((VkSemaphore)presentInfo.waitSemaphores[i].GetNativeHandle());
         }
 
+        Swapchain presentSwapchain = presentInfo.swapchain;
+
         uint32_t currentIndex = (uint32_t)presentInfo.swapchain.GetCurrentImageIndex();
+        VkSwapchainKHR vkSwapchain = (VkSwapchainKHR)presentSwapchain.GetNativeHandle();
 
         VkPresentInfoKHR info = {
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -208,14 +209,14 @@ namespace WilloRHI
             .waitSemaphoreCount = (uint32_t)presentInfo.waitSemaphores.size(),
             .pWaitSemaphores = waitSemaphores.data(),
             .swapchainCount = 1,
-            .pSwapchains = &presentInfo.swapchain.impl->_vkSwapchain,
+            .pSwapchains = &vkSwapchain,
             .pImageIndices = &currentIndex,
             .pResults = {}
         };
 
         VkResult result = vkQueuePresentKHR(_vkQueue, &info);
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            presentInfo.swapchain.impl->_needResize = true;
+            presentSwapchain.SetNeedsResize(true);
             _device.LogMessage("Present needs resize", false);
         }
     }
@@ -236,21 +237,23 @@ namespace WilloRHI
             _pendingCommandLists.pop_front();
 
             CommandList cmdList = cmdPair.second;
-            DeviceResources* resources = &_device.impl->_resources;
+            DeviceResources* resources = static_cast<DeviceResources*>(_device.GetDeviceResources());
 
-            _cmdListPool.at(cmdList.impl->_threadId).enqueue(cmdList);
+            _cmdListPool.at(cmdList.GetThreadId()).enqueue(cmdList);
+
+            DeletionQueues* deletionQueues = (DeletionQueues*)cmdList.GetDeletionQueue();
 
             // image
             ImageId imageHandle{};
-            while (cmdList.impl->_deletionQueues.imageQueue.try_dequeue(imageHandle)) {
+            while (deletionQueues->imageQueue.try_dequeue(imageHandle)) {
                 ImageResource& rsrc = resources->images.At(imageHandle.id);
-                vmaDestroyImage(_device.impl->_allocator, rsrc.image, rsrc.allocation);
+                vmaDestroyImage((VmaAllocator)_device.GetAllocator(), rsrc.image, rsrc.allocation);
                 resources->images.freeSlotQueue.enqueue(imageHandle.id);
             }
 
             // image view
             ImageViewId viewHandle{};
-            while (cmdList.impl->_deletionQueues.imageViewQueue.try_dequeue(viewHandle)) {
+            while (deletionQueues->imageViewQueue.try_dequeue(viewHandle)) {
                 ImageViewResource& rsrc = resources->imageViews.At(viewHandle.id);
                 vkDestroyImageView(_vkDevice, rsrc.imageView, nullptr);
                 resources->imageViews.freeSlotQueue.enqueue(viewHandle.id);
@@ -258,20 +261,20 @@ namespace WilloRHI
 
             // sampler
             SamplerId samplerHandle{};
-            while (cmdList.impl->_deletionQueues.samplerQueue.try_dequeue(samplerHandle)) {
+            while (deletionQueues->samplerQueue.try_dequeue(samplerHandle)) {
                 SamplerResource& rsrc = resources->samplers.At(samplerHandle.id);
                 vkDestroySampler(_vkDevice, rsrc.sampler, nullptr);
                 resources->samplers.freeSlotQueue.enqueue(samplerHandle.id);
             }
 
             BufferId bufferHandle{};
-            while (cmdList.impl->_deletionQueues.bufferQueue.try_dequeue(bufferHandle)) {
+            while (deletionQueues->bufferQueue.try_dequeue(bufferHandle)) {
                 BufferResource& rsrc = resources->buffers.At(bufferHandle.id);
-                vmaDestroyBuffer(_device.impl->_allocator, rsrc.buffer, rsrc.allocation);
+                vmaDestroyBuffer((VmaAllocator)_device.GetAllocator(), rsrc.buffer, rsrc.allocation);
                 resources->buffers.freeSlotQueue.enqueue(bufferHandle.id);
             }
 
-            vkResetCommandBuffer(cmdList.impl->_vkCommandBuffer, 0);
+            vkResetCommandBuffer((VkCommandBuffer)cmdList.GetNativeHandle(), 0);
         }
     }
 }

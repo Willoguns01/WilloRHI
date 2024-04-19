@@ -39,5 +39,7 @@ namespace WilloRHI
         friend ImplQueue;
         std::shared_ptr<ImplSwapchain> impl = nullptr;
 
+        void* GetNativeHandle();
+        void SetNeedsResize(bool value);
     };
 }

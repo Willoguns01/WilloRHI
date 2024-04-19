@@ -1,18 +1,11 @@
 #include "ImplCommandList.hpp"
-#include "ImplDevice.hpp"
 
 namespace WilloRHI
 {
-    void CommandList::Reset() { impl->Reset(); }
-    void ImplCommandList::Reset()
-    {
-        vkResetCommandBuffer(_vkCommandBuffer, 0);
-    }
-
     void CommandList::Begin() { impl->Begin(); }
     void ImplCommandList::Begin()
     {
-        _device.impl->_resources.resourcesMutex.lock_shared();
+        _device.LockResources_Shared();
 
         VkCommandBufferBeginInfo beginInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -27,7 +20,7 @@ namespace WilloRHI
     void CommandList::End() { impl->End(); }
     void ImplCommandList::End()
     {
-        _device.impl->_resources.resourcesMutex.unlock_shared();
+        _device.UnlockResources_Shared();
         vkEndCommandBuffer(_vkCommandBuffer);
     }
 
@@ -45,7 +38,7 @@ namespace WilloRHI
             .layerCount = subresourceRange.numLayers
         };
 
-        VkImage vkImage = _device.impl->_resources.images.resources[image.id].image;
+        VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
         vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
     }
 
@@ -65,7 +58,7 @@ namespace WilloRHI
             .layerCount = barrierInfo.subresourceRange.numLayers
         };
 
-        VkImage vkImage = _device.impl->_resources.images.resources[image.id].image;
+        VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
 
         VkImageMemoryBarrier2 imageBarrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -88,5 +81,27 @@ namespace WilloRHI
         };
 
         vkCmdPipelineBarrier2(_vkCommandBuffer, &depInfo);
+    }
+
+    void* CommandList::GetNativeHandle() { return impl->GetNativeHandle(); }
+    void* ImplCommandList::GetNativeHandle() {
+        return static_cast<void*>(_vkCommandBuffer);
+    }
+
+    std::thread::id CommandList::GetThreadId() { return impl->GetThreadId(); }
+    std::thread::id ImplCommandList::GetThreadId() {
+        return _threadId;
+    }
+
+    void* CommandList::GetDeletionQueue() { return impl->GetDeletionQueue(); }
+    void* ImplCommandList::GetDeletionQueue() {
+        return &_deletionQueues;
+    }
+
+    CommandList::CommandList(Device device, std::thread::id threadId, void* nativeHandle) {
+        impl = std::make_shared<ImplCommandList>();
+        impl->_device = device;
+        impl->_threadId = threadId;
+        impl->_vkCommandBuffer = (VkCommandBuffer)nativeHandle;
     }
 }

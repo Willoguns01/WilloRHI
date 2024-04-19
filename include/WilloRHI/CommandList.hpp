@@ -33,8 +33,6 @@ namespace WilloRHI
     public:
         CommandList() = default;
 
-        void Reset();
-
         void Begin();
         void End();
 
@@ -46,5 +44,11 @@ namespace WilloRHI
         friend ImplDevice;
         friend ImplQueue;
         std::shared_ptr<ImplCommandList> impl = nullptr;
+
+        CommandList(Device device, std::thread::id threadId, void* nativeHandle);
+
+        void* GetNativeHandle();
+        std::thread::id GetThreadId();
+        void* GetDeletionQueue();
     };
 }
