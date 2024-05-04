@@ -1,7 +1,6 @@
 #pragma once
 
 #include "WilloRHI/Forward.hpp"
-#include "WilloRHI/Util.hpp"
 #include "WilloRHI/Resources.hpp"
 
 #include <stdint.h>
@@ -17,10 +16,9 @@ namespace WilloRHI
     // to reduce memory usage or runtime performance costs of having many descriptors
     struct ResourceCountInfo
     {
-        uint64_t bufferCount = Util::Power(2, 20);
-        uint64_t imageCount = Util::Power(2, 20);
-        uint64_t imageViewCount = Util::Power(2, 20);
-        uint64_t samplerCount = Util::Power(2, 20);
+        uint64_t bufferCount = 1u << 20u;
+        uint64_t imageCount = 1u << 20u;
+        uint64_t samplerCount = 1u << 20u;
     };
 
     typedef void(*RHILoggingFunc)(const std::string&);
@@ -48,6 +46,9 @@ namespace WilloRHI
         // resources 
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
+        ImageId CreateImage(const ImageCreateInfo& createInfo);
+        ImageViewId CreateImageView(const ImageViewCreateInfo& createInfo);
+        SamplerId CreateSampler(const SamplerCreateInfo& createInfo);
 
         // functionality
 

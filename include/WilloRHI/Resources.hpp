@@ -6,10 +6,6 @@
 
 namespace WilloRHI
 {
-    struct AllocationCreateInfo {
-        uint32_t size = 0 ;
-    };
-
     struct BufferId    { uint64_t id = 0; };
     struct ImageId     { uint64_t id = 0; };
     struct ImageViewId { uint64_t id = 0; };
@@ -17,8 +13,8 @@ namespace WilloRHI
 
     // createinfo structures
     struct BufferCreateInfo {
-        AllocationCreateInfo allocationInfo = {};
-        AllocationFlags allocationFlags;
+        uint32_t size = 0;
+        AllocationUsageFlags usage;
     };
 
     struct ImageCreateInfo {

@@ -106,36 +106,43 @@ namespace WilloRHI
     {
         _resources.buffers = ResourceMap<BufferResource>(countInfo.bufferCount);
         _resources.images = ResourceMap<ImageResource>(countInfo.imageCount);
-        _resources.imageViews = ResourceMap<ImageViewResource>(countInfo.imageViewCount);
+        _resources.imageViews = ResourceMap<ImageViewResource>(countInfo.imageCount);
         _resources.samplers = ResourceMap<SamplerResource>(countInfo.samplerCount);
-    
+
         std::vector<VkDescriptorSetLayoutBinding> bindings = {
             VkDescriptorSetLayoutBinding {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = (uint32_t)countInfo.bufferCount,
-                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
                 .binding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = (uint32_t)countInfo.imageViewCount,
-                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .descriptorCount = (uint32_t)countInfo.imageCount,
+                .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
                 .binding = 2,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount = (uint32_t)countInfo.imageViewCount,
-                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .descriptorCount = (uint32_t)countInfo.imageCount,
+                .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
                 .binding = 3,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .descriptorCount = (uint32_t)countInfo.samplerCount,
-                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+                .pImmutableSamplers = nullptr
+            },
+            VkDescriptorSetLayoutBinding {
+                .binding = 4,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             }
         };
@@ -179,11 +186,53 @@ namespace WilloRHI
 
         ErrorCheck(vkAllocateDescriptorSets(_vkDevice, &allocInfo, &_globalDescriptors.descriptorSet));
 
-        LogMessage("Allocated resource sets with the following counts:\n - "
+        LogMessage("Allocated resource descriptor set with the following counts:\n - "
             + std::to_string(countInfo.bufferCount) + " Buffers\n - "
             + std::to_string(countInfo.imageCount) + " Images\n - "
-            + std::to_string(countInfo.imageViewCount) + " ImageViews\n - "
             + std::to_string(countInfo.samplerCount) + " Samplers", false);
+
+        // create the BDA address buffer
+
+        _addressBuffer = {};
+        
+        VkBufferUsageFlags usageFlags = 
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+        VkBufferCreateInfo bufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .size = (sizeof(uint64_t) * countInfo.bufferCount),
+            .usage = BUFFER_USAGE_FLAGS,
+            .sharingMode = VK_SHARING_MODE_CONCURRENT,
+            .queueFamilyIndexCount = 3,
+            .pQueueFamilyIndices = _vkQueueIndices
+        };
+
+        VmaAllocationCreateFlags allocFlags = 
+            VMA_ALLOCATION_CREATE_MAPPED_BIT | 
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | 
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        VmaAllocationCreateInfo bufferAllocInfo = {
+            .flags = allocFlags,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            .requiredFlags = {},
+            .preferredFlags = {},
+            .memoryTypeBits = std::numeric_limits<uint32_t>::max(),
+            .pool = nullptr,
+            .pUserData = nullptr,
+            .priority = 0.5f
+        };
+
+        VmaAllocationInfo newAllocInfo = {};
+
+        vmaCreateBuffer(_allocator, &bufferInfo, &bufferAllocInfo, &_addressBuffer.buffer, &_addressBuffer.allocation, &newAllocInfo);
+
+        _addressBuffer.isMapped = true;
+        _addressBuffer.mappedAddress = newAllocInfo.pMappedData;
     }
 
     void ImplDevice::SetupDefaultResources()
@@ -218,23 +267,111 @@ namespace WilloRHI
         return impl->CreateBuffer(createInfo); }
     BufferId ImplDevice::CreateBuffer(const BufferCreateInfo& createInfo)
     {
+        BufferResource newBuffer = {};
+        newBuffer.createInfo = createInfo;
+
+        // create and allocate for buffer
+
         VkBufferCreateInfo bufferInfo = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .size = 0,
+            .size = createInfo.size,
             .usage = BUFFER_USAGE_FLAGS,
-            // apparently concurrent sharing mode has no affect with buffers?
-            // need to test this vs. exclusive sharing with queue ownership transfer
             .sharingMode = VK_SHARING_MODE_CONCURRENT,
             .queueFamilyIndexCount = 3,
             .pQueueFamilyIndices = _vkQueueIndices
         };
 
-        VmaAllocationCreateInfo allocInfo = {
+        VmaAllocationCreateFlags allocFlags = 0;
+        if (createInfo.usage & AllocationUsageFlag::HOST_ACCESS_SEQUENTIAL_WRITE ||
+            createInfo.usage & AllocationUsageFlag::HOST_ACCESS_RANDOM) {
+                allocFlags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+                newBuffer.isMapped = true;
+            }
 
+        VmaAllocationCreateInfo allocInfo = {
+            .flags = allocFlags,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            .requiredFlags = {},
+            .preferredFlags = {},
+            .memoryTypeBits = std::numeric_limits<uint32_t>::max(),
+            .pool = nullptr,
+            .pUserData = nullptr,
+            .priority = 0.5f
         };
 
+        VmaAllocationInfo newAllocInfo = {};
+
+        ErrorCheck(vmaCreateBuffer(_allocator, &bufferInfo, &allocInfo,
+            &newBuffer.buffer, &newBuffer.allocation, &newAllocInfo));
+
+        // get new buffer id slot, add resource to map
+
+        uint64_t bufferSlot = _resources.buffers.Allocate();
+        _resources.buffers.resources[bufferSlot] = newBuffer;
+        
+        // fill-out other structure values - void* pointer and device address
+
+        newBuffer.mappedAddress = newAllocInfo.pMappedData;
+
+        VkBufferDeviceAddressInfo addressInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .pNext = nullptr,
+            .buffer = newBuffer.buffer
+        };
+
+        newBuffer.deviceAddress = vkGetBufferDeviceAddress(_vkDevice, &addressInfo);
+        // write address to address buffer pointer
+        _addressBufferPtr[bufferSlot] = newBuffer.deviceAddress;
+
+        // write buffer descriptor to same slot as id
+
+        VkDescriptorBufferInfo bufferDescriptorInfo = {
+            .buffer = newBuffer.buffer,
+            .offset = 0,
+            .range = createInfo.size
+        };
+
+        VkWriteDescriptorSet descriptorWriteDesc = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = nullptr,
+            .dstSet = _globalDescriptors.descriptorSet,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &bufferDescriptorInfo,
+            .pTexelBufferView = nullptr
+        };
+
+        vkUpdateDescriptorSets(_vkDevice, 1, &descriptorWriteDesc, 0, nullptr);
+
+        BufferId newBufferId = {};
+        newBufferId.id = bufferSlot;
+
+        return newBufferId;
+    }
+
+    ImageId Device::CreateImage(const ImageCreateInfo& createInfo) {
+        return impl->CreateImage(createInfo); }
+    ImageId ImplDevice::CreateImage(const ImageCreateInfo& createInfo)
+    {
+        return {};
+    }
+
+    ImageViewId Device::CreateImageView(const ImageViewCreateInfo& createInfo) {
+        return impl->CreateImageView(createInfo); }
+    ImageViewId ImplDevice::CreateImageView(const ImageViewCreateInfo& createInfo)
+    {
+        return {};
+    }
+
+    SamplerId Device::CreateSampler(const SamplerCreateInfo& createInfo) {
+        return impl->CreateSampler(createInfo); }
+    SamplerId ImplDevice::CreateSampler(const SamplerCreateInfo& createInfo)
+    {
         return {};
     }
 

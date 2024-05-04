@@ -18,8 +18,11 @@ namespace WilloRHI
 
     struct BufferResource {
         VkBuffer buffer = VK_NULL_HANDLE;
-        // we wont be using BDA for now until HLSL has better support
         VkDeviceAddress deviceAddress = 0;
+
+        void* mappedAddress = nullptr;
+        bool isMapped = false;
+
         VmaAllocation allocation = VK_NULL_HANDLE;
         BufferCreateInfo createInfo = {};
     };
@@ -37,6 +40,7 @@ namespace WilloRHI
 
     struct SamplerResource {
         VkSampler sampler = VK_NULL_HANDLE;
+        SamplerCreateInfo createInfo = {};
     };
 
     template <typename Resource_T>

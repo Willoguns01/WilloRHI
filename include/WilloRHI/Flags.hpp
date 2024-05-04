@@ -1,7 +1,9 @@
 #pragma once
+
 // yoinky-sploinkied from Juan at https://github.com/JuanDiegoMontoya/Fwog/blob/main/include/Fwog/detail/Flags.h
 // who originally got it from https://github.com/cdgiessen/vk-module/blob/076baa98cba35cd93a6ab56c3fd1b1ea2313f806/codegen_text.py#L53
 // Thanks Charles!
+
 #define WilloRHI_DECLARE_FLAG_TYPE(FLAG_TYPE, FLAG_BITS, BASE_TYPE)                           \
                                                                                           \
   struct FLAG_TYPE                                                                        \

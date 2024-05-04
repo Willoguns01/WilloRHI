@@ -25,12 +25,8 @@ int main()
     HWND hwnd = glfwGetWin32Window(window);
     glfwSwapInterval(1);
 
-    WilloRHI::ResourceCountInfo countInfo = {
-        .bufferCount = 32,
-        .imageCount = 32,
-        .imageViewCount = 32,
-        .samplerCount = 32
-    };
+    // just roll with the defaults
+    WilloRHI::ResourceCountInfo countInfo = {};
 
     //WilloRHI::DeviceCreateInfo deviceInfo = {
     //    .applicationName = "01_Initialization",
@@ -53,7 +49,7 @@ int main()
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::MAILBOX,
+        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
@@ -94,10 +90,10 @@ int main()
         cmdList.Begin();
 
         WilloRHI::ImageMemoryBarrierInfo barrierInfo = {
-            .srcStage = WilloRHI::PipelineStage::ALL_COMMANDS_BIT,
-            .dstStage = WilloRHI::PipelineStage::CLEAR_BIT,
-            .srcAccess = WilloRHI::MemoryAccess::READ,
-            .dstAccess = WilloRHI::MemoryAccess::WRITE,
+            .srcStage = WilloRHI::PipelineStageFlag::ALL_COMMANDS_BIT,
+            .dstStage = WilloRHI::PipelineStageFlag::CLEAR_BIT,
+            .srcAccess = WilloRHI::MemoryAccessFlag::READ,
+            .dstAccess = WilloRHI::MemoryAccessFlag::WRITE,
             .srcLayout = WilloRHI::ImageLayout::UNDEFINED,
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
             .subresourceRange = {}
@@ -105,13 +101,15 @@ int main()
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
 
         float clearColour[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-        cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
+        for (int i = 0; i < 1000; i++) {
+            cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
+        }
 
         barrierInfo = {
-            .srcStage = WilloRHI::PipelineStage::CLEAR_BIT,
-            .dstStage = WilloRHI::PipelineStage::ALL_COMMANDS_BIT,
-            .srcAccess = WilloRHI::MemoryAccess::WRITE,
-            .dstAccess = WilloRHI::MemoryAccess::READ,
+            .srcStage = WilloRHI::PipelineStageFlag::CLEAR_BIT,
+            .dstStage = WilloRHI::PipelineStageFlag::ALL_COMMANDS_BIT,
+            .srcAccess = WilloRHI::MemoryAccessFlag::WRITE,
+            .dstAccess = WilloRHI::MemoryAccessFlag::READ,
             .srcLayout = WilloRHI::ImageLayout::GENERAL,
             .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
         };

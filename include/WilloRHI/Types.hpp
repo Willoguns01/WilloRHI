@@ -7,7 +7,6 @@
 #include <span>
 #include <thread>
 
-#include "WilloRHI/Util.hpp"
 #include "WilloRHI/Flags.hpp"
 
 namespace WilloRHI
@@ -307,7 +306,7 @@ namespace WilloRHI
         MAILBOX = 1
     };
 
-    enum class PipelineStage : uint64_t {
+    enum class PipelineStageFlag : uint64_t {
         NONE = 0ULL,
         TOP_OF_PIPE_BIT = 0x00000001ULL,
         DRAW_INDIRECT_BIT = 0x00000002ULL,
@@ -333,14 +332,14 @@ namespace WilloRHI
         VERTEX_ATTRIBUTE_INPUT_BIT = 0x2000000000ULL,
         PRE_RASTERIZATION_SHADERS_BIT = 0x4000000000ULL
     };
-    WilloRHI_DECLARE_FLAG_TYPE(PipelineStageBits, PipelineStage, uint64_t)
+    WilloRHI_DECLARE_FLAG_TYPE(PipelineStageFlags, PipelineStageFlag, uint64_t)
 
-    enum class MemoryAccess : uint64_t {
+    enum class MemoryAccessFlag : uint64_t {
         NONE = 0,
         READ = 0x00008000,
         WRITE = 0x00010000
     };
-    WilloRHI_DECLARE_FLAG_TYPE(MemoryAccessBits, MemoryAccess, uint64_t)
+    WilloRHI_DECLARE_FLAG_TYPE(MemoryAccessFlags, MemoryAccessFlag, uint64_t)
     
     enum class ImageLayout : uint32_t {
         UNDEFINED = 0,
@@ -353,12 +352,7 @@ namespace WilloRHI
         MAX_ENUM = 0x7fffffff
     };
 
-    enum class AllocationFlagBits : uint32_t {
-        
-    };
-    WilloRHI_DECLARE_FLAG_TYPE(AllocationFlags, AllocationFlagBits, uint32_t)
-
-    enum class ImageUsage : uint32_t {
+    enum class ImageUsageFlag : uint32_t {
         TRANSFER_SRC_BIT = 0x00000001,
         TRANSFER_DST_BIT = 0x00000002,
         SAMPLED_BIT = 0x00000004,
@@ -366,5 +360,13 @@ namespace WilloRHI
         COLOR_ATTACHMENT_BIT = 0x00000010,
         DEPTH_STENCIL_ATTACHMENT_BIT = 0x00000020,
     };
-    WilloRHI_DECLARE_FLAG_TYPE(ImageUsageBits, ImageUsage, uint32_t)
+    WilloRHI_DECLARE_FLAG_TYPE(ImageUsageFlags, ImageUsageFlag, uint32_t)
+
+    enum class AllocationUsageFlag : uint32_t {
+        DEDICATED_MEMORY = 0x00000001,
+        CAN_ALIAS = 0x00000200,
+        HOST_ACCESS_SEQUENTIAL_WRITE = 0x00000400,
+        HOST_ACCESS_RANDOM = 0x00000800
+    };
+    WilloRHI_DECLARE_FLAG_TYPE(AllocationUsageFlags, AllocationUsageFlag, uint32_t)
 }

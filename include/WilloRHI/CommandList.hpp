@@ -19,10 +19,10 @@ namespace WilloRHI
 
     struct ImageMemoryBarrierInfo
     {
-        PipelineStageBits srcStage = PipelineStage::NONE;
-        PipelineStageBits dstStage = PipelineStage::NONE;
-        MemoryAccessBits srcAccess = MemoryAccess::NONE;
-        MemoryAccessBits dstAccess = MemoryAccess::NONE;
+        PipelineStageFlags srcStage = PipelineStageFlag::NONE;
+        PipelineStageFlags dstStage = PipelineStageFlag::NONE;
+        MemoryAccessFlags srcAccess = MemoryAccessFlag::NONE;
+        MemoryAccessFlags dstAccess = MemoryAccessFlag::NONE;
         ImageLayout srcLayout = ImageLayout::UNDEFINED;
         ImageLayout dstLayout = ImageLayout::UNDEFINED;
         ImageSubresourceRange subresourceRange = {};

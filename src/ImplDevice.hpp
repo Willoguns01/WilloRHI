@@ -33,6 +33,8 @@ namespace WilloRHI
 
         DeviceResources _resources;
         GlobalDescriptors _globalDescriptors;
+        BufferResource _addressBuffer;
+        uint64_t* _addressBufferPtr = nullptr;
 
         RHILoggingFunc _loggingCallback = nullptr;
         bool _doLogInfo = false;
@@ -56,6 +58,9 @@ namespace WilloRHI
         // resources
 
         BufferId CreateBuffer(const BufferCreateInfo& createInfo);
+        ImageId CreateImage(const ImageCreateInfo& createInfo);
+        ImageViewId CreateImageView(const ImageViewCreateInfo& createInfo);
+        SamplerId CreateSampler(const SamplerCreateInfo& createInfo);
 
         // functionality
 
