@@ -6,12 +6,6 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
-#undef max
-
-#include <thread>
-#include <chrono>
-#include <semaphore>
-
 static void OutputMessage(const std::string& message) {
     std::cout << message.c_str() << "\n";
 }
