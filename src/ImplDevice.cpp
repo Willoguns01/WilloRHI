@@ -1,5 +1,7 @@
 #include "ImplDevice.hpp"
 
+#include "WilloRHI/WilloRHI_Shared.h"
+
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
@@ -66,11 +68,11 @@ namespace WilloRHI
         
         vmaCreateAllocator(&allocatorInfo, &_allocator);
 
-        SetupDescriptors(createInfo.resourceCounts);
-
         _vkQueueIndices[0] = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
         _vkQueueIndices[1] = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
         _vkQueueIndices[2] = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
+
+        SetupDescriptors(createInfo.resourceCounts);
 
         LogMessage("Initialised Device", false);
         
@@ -95,8 +97,11 @@ namespace WilloRHI
         vkDestroyDescriptorSetLayout(_vkDevice, _globalDescriptors.setLayout, nullptr);
         vkDestroyDescriptorPool(_vkDevice, _globalDescriptors.pool, nullptr);
 
+        vmaDestroyBuffer(_allocator, _addressBuffer.buffer, _addressBuffer.allocation);
+
         vmaDestroyAllocator(_allocator);
         vkDestroyDevice(_vkDevice, nullptr);
+        LogMessage("Destroy device", false);
 
         vkb::destroy_debug_utils_messenger(_vkInstance, _vkDebugMessenger);
         vkDestroyInstance(_vkInstance, nullptr);
@@ -111,35 +116,35 @@ namespace WilloRHI
 
         std::vector<VkDescriptorSetLayoutBinding> bindings = {
             VkDescriptorSetLayoutBinding {
-                .binding = 0,
+                .binding = WilloRHI_STORAGE_BUFFER_BINDING,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = (uint32_t)countInfo.bufferCount,
                 .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
-                .binding = 1,
+                .binding = WilloRHI_STORAGE_IMAGE_BINDING,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = (uint32_t)countInfo.imageCount,
                 .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
-                .binding = 2,
+                .binding = WilloRHI_SAMPLED_IMAGE_BINDING,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = (uint32_t)countInfo.imageCount,
                 .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
-                .binding = 3,
+                .binding = WilloRHI_SAMPLER_BINDING,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .descriptorCount = (uint32_t)countInfo.samplerCount,
                 .stageFlags = VK_SHADER_STAGE_ALL,
                 .pImmutableSamplers = nullptr
             },
             VkDescriptorSetLayoutBinding {
-                .binding = 4,
+                .binding = WilloRHI_DEVICE_ADDRESS_BUFFER_BINDING,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_ALL,
@@ -205,7 +210,7 @@ namespace WilloRHI
             .pNext = nullptr,
             .flags = 0,
             .size = (sizeof(uint64_t) * countInfo.bufferCount),
-            .usage = BUFFER_USAGE_FLAGS,
+            .usage = usageFlags,
             .sharingMode = VK_SHARING_MODE_CONCURRENT,
             .queueFamilyIndexCount = 3,
             .pQueueFamilyIndices = _vkQueueIndices
@@ -233,6 +238,30 @@ namespace WilloRHI
 
         _addressBuffer.isMapped = true;
         _addressBuffer.mappedAddress = newAllocInfo.pMappedData;
+        _addressBufferPtr = (uint64_t*)_addressBuffer.mappedAddress;
+
+        VkDescriptorBufferInfo bufferDescriptorInfo = {
+            .buffer = _addressBuffer.buffer,
+            .offset = 0,
+            .range = (sizeof(uint64_t) * countInfo.bufferCount)
+        };
+
+        VkWriteDescriptorSet descriptorWriteDesc = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = nullptr,
+            .dstSet = _globalDescriptors.descriptorSet,
+            .dstBinding = WilloRHI_DEVICE_ADDRESS_BUFFER_BINDING,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pImageInfo = nullptr,
+            .pBufferInfo = &bufferDescriptorInfo,
+            .pTexelBufferView = nullptr
+        };
+
+        vkUpdateDescriptorSets(_vkDevice, 1, &descriptorWriteDesc, 0, nullptr);
+
+        LogMessage("Created buffer-address buffer for address count of " + std::to_string(countInfo.bufferCount), false);
     }
 
     void ImplDevice::SetupDefaultResources()
@@ -268,11 +297,12 @@ namespace WilloRHI
     BufferId ImplDevice::CreateBuffer(const BufferCreateInfo& createInfo)
     {
         BufferResource newBuffer = {};
-        newBuffer.createInfo = createInfo;
+
+        uint64_t bufferSlot = _resources.buffers.Allocate();
 
         // create and allocate for buffer
 
-        VkBufferCreateInfo bufferInfo = {
+        VkBufferCreateInfo vkBufferInfo = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
@@ -283,14 +313,14 @@ namespace WilloRHI
             .pQueueFamilyIndices = _vkQueueIndices
         };
 
-        VmaAllocationCreateFlags allocFlags = 0;
-        if (createInfo.usage & AllocationUsageFlag::HOST_ACCESS_SEQUENTIAL_WRITE ||
-            createInfo.usage & AllocationUsageFlag::HOST_ACCESS_RANDOM) {
+        VmaAllocationCreateFlags allocFlags = static_cast<VmaAllocationCreateFlags>(createInfo.allocationFlags);
+        if (createInfo.allocationFlags & AllocationUsageFlag::HOST_ACCESS_SEQUENTIAL_WRITE ||
+            createInfo.allocationFlags & AllocationUsageFlag::HOST_ACCESS_RANDOM) {
                 allocFlags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
                 newBuffer.isMapped = true;
             }
 
-        VmaAllocationCreateInfo allocInfo = {
+        VmaAllocationCreateInfo allocationCreateInfo = {
             .flags = allocFlags,
             .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             .requiredFlags = {},
@@ -301,19 +331,13 @@ namespace WilloRHI
             .priority = 0.5f
         };
 
-        VmaAllocationInfo newAllocInfo = {};
+        VmaAllocationInfo newAllocation = {};
 
-        ErrorCheck(vmaCreateBuffer(_allocator, &bufferInfo, &allocInfo,
-            &newBuffer.buffer, &newBuffer.allocation, &newAllocInfo));
+        ErrorCheck(vmaCreateBuffer(_allocator, &vkBufferInfo, &allocationCreateInfo,
+            &newBuffer.buffer, &newBuffer.allocation, &newAllocation));
 
-        // get new buffer id slot, add resource to map
-
-        uint64_t bufferSlot = _resources.buffers.Allocate();
-        _resources.buffers.resources[bufferSlot] = newBuffer;
-        
-        // fill-out other structure values - void* pointer and device address
-
-        newBuffer.mappedAddress = newAllocInfo.pMappedData;
+        newBuffer.mappedAddress = newAllocation.pMappedData;
+        newBuffer.createInfo = createInfo;
 
         VkBufferDeviceAddressInfo addressInfo = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
@@ -337,8 +361,8 @@ namespace WilloRHI
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext = nullptr,
             .dstSet = _globalDescriptors.descriptorSet,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
+            .dstBinding = WilloRHI_STORAGE_BUFFER_BINDING,
+            .dstArrayElement = (uint32_t)bufferSlot,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .pImageInfo = nullptr,
@@ -348,23 +372,79 @@ namespace WilloRHI
 
         vkUpdateDescriptorSets(_vkDevice, 1, &descriptorWriteDesc, 0, nullptr);
 
-        BufferId newBufferId = {};
-        newBufferId.id = bufferSlot;
+        _resources.buffers.At(bufferSlot) = newBuffer;
 
-        return newBufferId;
+        return bufferSlot;
     }
 
     ImageId Device::CreateImage(const ImageCreateInfo& createInfo) {
         return impl->CreateImage(createInfo); }
     ImageId ImplDevice::CreateImage(const ImageCreateInfo& createInfo)
     {
-        return {};
+        ImageResource newImage = {};
+
+        uint64_t imageSlot = _resources.images.Allocate();
+
+        VkImageType imageTypeDims[3] = {VK_IMAGE_TYPE_1D, VK_IMAGE_TYPE_2D, VK_IMAGE_TYPE_3D};
+        VkImageType imageType = imageTypeDims[createInfo.dimensions - 1];
+
+        VkImageCreateInfo vkImageInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = static_cast<VkImageCreateFlags>(createInfo.createFlags),
+            .imageType = imageType,
+            .format = static_cast<VkFormat>(createInfo.format),
+            .extent = VkExtent3D{createInfo.size.width, createInfo.size.height, createInfo.size.depth},
+            .mipLevels = createInfo.numLevels,
+            .arrayLayers = createInfo.numLayers,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = static_cast<VkImageTiling>(createInfo.tiling),
+            .usage = static_cast<VkImageUsageFlags>(createInfo.usageFlags),
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        };
+
+        VmaAllocationCreateFlags allocFlags = static_cast<VmaAllocationCreateFlags>(createInfo.allocationFlags);
+        if (createInfo.allocationFlags & AllocationUsageFlag::HOST_ACCESS_SEQUENTIAL_WRITE ||
+            createInfo.allocationFlags & AllocationUsageFlag::HOST_ACCESS_RANDOM) {
+                allocFlags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+                newImage.isMapped = true;
+            }
+
+        VmaAllocationCreateInfo allocationCreateInfo = {
+            .flags = allocFlags,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            .requiredFlags = {},
+            .preferredFlags = {},
+            .memoryTypeBits = std::numeric_limits<uint32_t>::max(),
+            .pool = nullptr,
+            .pUserData = nullptr,
+            .priority = 0.5f
+        };
+
+        VmaAllocationInfo newAllocation = {};
+
+        ErrorCheck(vmaCreateImage(_allocator, &vkImageInfo, &allocationCreateInfo,
+            &newImage.image, &newImage.allocation, &newAllocation));
+
+        newImage.mappedAddress = newAllocation.pMappedData;
+        newImage.createInfo = createInfo;
+
+        _resources.images.At(imageSlot) = newImage;
+
+        // no descriptor writes here! that's up to image views
+
+        return imageSlot;
     }
 
     ImageViewId Device::CreateImageView(const ImageViewCreateInfo& createInfo) {
         return impl->CreateImageView(createInfo); }
     ImageViewId ImplDevice::CreateImageView(const ImageViewCreateInfo& createInfo)
     {
+        VkImageViewCreateInfo vkImageViewInfo = {
+            
+        };
+
         return {};
     }
 
@@ -373,6 +453,54 @@ namespace WilloRHI
     SamplerId ImplDevice::CreateSampler(const SamplerCreateInfo& createInfo)
     {
         return {};
+    }
+
+    void* Device::GetBufferPointer(BufferId buffer) { return impl->GetBufferPointer(buffer); }
+    void* ImplDevice::GetBufferPointer(BufferId buffer) {
+        BufferResource& rsrc = _resources.buffers.At(buffer);
+        if (!rsrc.isMapped) {
+            LogMessage("Buffer " + std::to_string(buffer) + " is not mapped");
+            return nullptr;
+        }
+        return rsrc.mappedAddress;
+    }
+
+    void* Device::GetImagePointer(ImageId image) { return impl->GetImagePointer(image); }
+    void* ImplDevice::GetImagePointer(ImageId image) {
+        ImageResource& rsrc = _resources.images.At(image);
+        if (!rsrc.isMapped) {
+            LogMessage("Image " + std::to_string(image) + " is not mapped");
+            return nullptr;
+        }
+        return rsrc.mappedAddress;
+    }
+
+    void Device::DestroyBuffer(BufferId buffer) { impl->DestroyBuffer(buffer); }
+    void ImplDevice::DestroyBuffer(BufferId buffer) {
+        BufferResource& rsrc = _resources.buffers.At(buffer);
+        vmaDestroyBuffer(_allocator, rsrc.buffer, rsrc.allocation);
+        _resources.buffers.Free(buffer);
+    }
+
+    void Device::DestroyImage(ImageId image) { impl->DestroyImage(image); }
+    void ImplDevice::DestroyImage(ImageId image) {
+        ImageResource& rsrc = _resources.images.At(image);
+        vmaDestroyImage(_allocator, rsrc.image, rsrc.allocation);
+        _resources.images.Free(image);
+    }
+
+    void Device::DestroyImageView(ImageViewId imageView) { impl->DestroyImageView(imageView); }
+    void ImplDevice::DestroyImageView(ImageViewId imageView) {
+        ImageViewResource& rsrc = _resources.imageViews.At(imageView);
+        vkDestroyImageView(_vkDevice, rsrc.imageView, nullptr);
+        _resources.imageViews.Free(imageView);
+    }
+
+    void Device::DestroySampler(SamplerId sampler) { impl->DestroySampler(sampler); }
+    void ImplDevice::DestroySampler(SamplerId sampler) {
+        SamplerResource& rsrc = _resources.samplers.At(sampler);
+        vkDestroySampler(_vkDevice, rsrc.sampler, nullptr);
+        _resources.samplers.Free(sampler);
     }
 
     void Device::LogMessage(const std::string& message, bool error) {
@@ -425,22 +553,22 @@ namespace WilloRHI
 
     void* Device::GetBufferNativeHandle(BufferId handle) const { return impl->GetBufferNativeHandle(handle); }
     void* ImplDevice::GetBufferNativeHandle(BufferId handle) const {
-        return static_cast<void*>(_resources.buffers.At(handle.id).buffer);
+        return static_cast<void*>(_resources.buffers.At(handle).buffer);
     }
     
     void* Device::GetImageNativeHandle(ImageId handle) const { return impl->GetImageNativeHandle(handle); }
     void* ImplDevice::GetImageNativeHandle(ImageId handle) const {
-        return static_cast<void*>(_resources.images.At(handle.id).image);
+        return static_cast<void*>(_resources.images.At(handle).image);
     }
 
     void* Device::GetImageViewNativeHandle(ImageViewId handle) const { return impl->GetImageViewNativeHandle(handle); }
     void* ImplDevice::GetImageViewNativeHandle(ImageViewId handle) const {
-        return static_cast<void*>(_resources.imageViews.At(handle.id).imageView);
+        return static_cast<void*>(_resources.imageViews.At(handle).imageView);
     }
     
     void* Device::GetSamplerNativeHandle(SamplerId handle) const { return impl->GetSamplerNativeHandle(handle); }
     void* ImplDevice::GetSamplerNativeHandle(SamplerId handle) const {
-        return static_cast<void*>(_resources.samplers.At(handle.id).sampler);
+        return static_cast<void*>(_resources.samplers.At(handle).sampler);
     }
 
     void* Device::GetDeviceResources() { return impl->GetDeviceResources(); }

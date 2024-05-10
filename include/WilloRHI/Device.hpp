@@ -50,6 +50,17 @@ namespace WilloRHI
         ImageViewId CreateImageView(const ImageViewCreateInfo& createInfo);
         SamplerId CreateSampler(const SamplerCreateInfo& createInfo);
 
+        void* GetBufferPointer(BufferId buffer);
+        void* GetImagePointer(ImageId image);
+
+        // immediate resource destruction
+        // these are gpu-unsafe, only use when you KNOW a resource is no longer needed by GPU
+
+        void DestroyBuffer(BufferId buffer);
+        void DestroyImage(ImageId image);
+        void DestroyImageView(ImageViewId imageView);
+        void DestroySampler(SamplerId sampler);
+
         // functionality
 
         void LogMessage(const std::string& message, bool error = true);

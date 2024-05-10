@@ -66,7 +66,7 @@ namespace WilloRHI
         {
             uint64_t imageId = resources->images.Allocate();
             resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
-            _images.push_back(ImageId{.id = imageId});
+            _images.push_back(ImageId{imageId});
 
             _imageSync.push_back(WilloRHI::BinarySemaphore::Create(pDevice));
         }
@@ -81,7 +81,7 @@ namespace WilloRHI
     void ImplSwapchain::Cleanup() {
         DeviceResources* resources = (DeviceResources*)device.GetDeviceResources();
         for (int i = 0; i < _framesInFlight; i++) {
-            resources->images.freeSlotQueue.enqueue(_images.at(i).id);
+            resources->images.freeSlotQueue.enqueue(_images.at(i));
         }
 
         vkDestroySwapchainKHR(vkDevice, _vkSwapchain, nullptr);
@@ -204,11 +204,11 @@ namespace WilloRHI
 
         for (int32_t i = 0; i < _framesInFlight; i++)
         {
-            resources->images.Free(_images.at(i).id);
+            resources->images.Free(_images.at(i));
             uint64_t imageId = resources->images.Allocate();
 
             resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
-            _images.at(i) = ImageId{.id = imageId};
+            _images.at(i) = ImageId{imageId};
         }
 
         device.LogMessage("Resized swapchain", false);

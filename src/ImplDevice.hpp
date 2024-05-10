@@ -62,6 +62,14 @@ namespace WilloRHI
         ImageViewId CreateImageView(const ImageViewCreateInfo& createInfo);
         SamplerId CreateSampler(const SamplerCreateInfo& createInfo);
 
+        void* GetBufferPointer(BufferId buffer);
+        void* GetImagePointer(ImageId image);
+
+        void DestroyBuffer(BufferId buffer);
+        void DestroyImage(ImageId image);
+        void DestroyImageView(ImageViewId imageView);
+        void DestroySampler(SamplerId sampler);
+
         // functionality
 
         void LogMessage(const std::string& message, bool error = true);

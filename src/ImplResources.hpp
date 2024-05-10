@@ -6,6 +6,8 @@
 #include <concurrentqueue.h>
 #include <vk_mem_alloc.h>
 
+#include "WilloRHI/Resources.hpp"
+
 namespace WilloRHI
 {
     static const inline VkBufferUsageFlags BUFFER_USAGE_FLAGS = 
@@ -29,8 +31,16 @@ namespace WilloRHI
 
     struct ImageResource {
         VkImage image = VK_NULL_HANDLE;
+
+        void* mappedAddress = nullptr;
+        bool isMapped = false;
+
         VmaAllocation allocation = VK_NULL_HANDLE;
         ImageCreateInfo createInfo = {};
+
+        VkPipelineStageFlags2 currentPipelineStage = VK_PIPELINE_STAGE_2_NONE;
+        VkAccessFlags2 currentAccessFlags = VK_ACCESS_2_NONE;
+        VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     };
 
     struct ImageViewResource {
@@ -48,9 +58,19 @@ namespace WilloRHI
         Resource_T* resources = nullptr;
         moodycamel::ConcurrentQueue<uint64_t> freeSlotQueue;
         uint64_t maxNumResources = 0;
+        std::string resourceNameHash;
 
         ResourceMap() {}
         ResourceMap(uint64_t maxCount) {
+
+            // TODO: investigate getting rid of moodycamel
+            /*
+            just use an atomic counter to index into the list
+            once counter hits max, set to 0 and go again
+            keep an extra list of bools showing which slots are used
+            this would probably perform better and use less RAM, need to test
+            */
+
             resources = new Resource_T[maxCount];
             
             freeSlotQueue = moodycamel::ConcurrentQueue<uint64_t>(maxCount);
@@ -60,11 +80,14 @@ namespace WilloRHI
             for (uint64_t i = 0; i < maxNumResources; i++)
                 vec.push_back(i);
             freeSlotQueue.enqueue_bulk(vec.begin(), maxNumResources);
+
+            resourceNameHash = typeid(Resource_T).name();
         }
 
         uint64_t Allocate() {
             uint64_t newSlot = 0;
             freeSlotQueue.try_dequeue(newSlot);
+            assert((newSlot != 0) && "Ran out of resource slots");
             return newSlot;
         }
 

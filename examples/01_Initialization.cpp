@@ -6,8 +6,11 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
+#undef max
+
 #include <thread>
 #include <chrono>
+#include <semaphore>
 
 static void OutputMessage(const std::string& message) {
     std::cout << message.c_str() << "\n";
@@ -49,7 +52,7 @@ int main()
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
+        .presentMode = WilloRHI::PresentMode::FIFO,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
@@ -66,13 +69,12 @@ int main()
     uint64_t frameNum = FRAME_OVERLAP;
 
     WilloRHI::Queue graphicsQueue = WilloRHI::Queue::Create(device, WilloRHI::QueueType::GRAPHICS);
-    
+
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
         // this is far from optimal resizing, should read up on smooth resize
-        // maybe give Swapchain its own Resize() function
         int newWidth, newHeight;
         glfwGetWindowSize(window, &newWidth, &newHeight);
         if (newWidth != swapchainInfo.width || newHeight != swapchainInfo.height) {
@@ -90,27 +92,19 @@ int main()
         cmdList.Begin();
 
         WilloRHI::ImageMemoryBarrierInfo barrierInfo = {
-            .srcStage = WilloRHI::PipelineStageFlag::ALL_COMMANDS_BIT,
             .dstStage = WilloRHI::PipelineStageFlag::CLEAR_BIT,
-            .srcAccess = WilloRHI::MemoryAccessFlag::READ,
             .dstAccess = WilloRHI::MemoryAccessFlag::WRITE,
-            .srcLayout = WilloRHI::ImageLayout::UNDEFINED,
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
             .subresourceRange = {}
         };
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
 
         float clearColour[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-        for (int i = 0; i < 1000; i++) {
-            cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
-        }
+        cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
 
         barrierInfo = {
-            .srcStage = WilloRHI::PipelineStageFlag::CLEAR_BIT,
             .dstStage = WilloRHI::PipelineStageFlag::ALL_COMMANDS_BIT,
-            .srcAccess = WilloRHI::MemoryAccessFlag::WRITE,
             .dstAccess = WilloRHI::MemoryAccessFlag::READ,
-            .srcLayout = WilloRHI::ImageLayout::GENERAL,
             .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
         };
         cmdList.TransitionImageLayout(swapchainImage, barrierInfo);

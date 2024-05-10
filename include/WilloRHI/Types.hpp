@@ -30,14 +30,14 @@ namespace WilloRHI
     };
 
     struct Offset2D {
-        uint32_t x = 0;
-        uint32_t y = 0;
+        int32_t x = 0;
+        int32_t y = 0;
     };
 
     struct Offset3D {
-        uint32_t x = 0;
-        uint32_t y = 0;
-        uint32_t z = 0;
+        int32_t x = 0;
+        int32_t y = 0;
+        int32_t z = 0;
     };
 
     struct Rect2D {
@@ -369,4 +369,21 @@ namespace WilloRHI
         HOST_ACCESS_RANDOM = 0x00000800
     };
     WilloRHI_DECLARE_FLAG_TYPE(AllocationUsageFlags, AllocationUsageFlag, uint32_t)
+
+    enum class ImageCreateFlag : uint32_t {
+        ALLOW_MUTABLE_FORMAT = 0x00000008,
+        COMPAT_CUBE = 0x00000010,
+        COMPAT_2D_ARRAY = 0x00000020,
+        ALLOW_ALIAS = 0x00000400
+    };
+    WilloRHI_DECLARE_FLAG_TYPE(ImageCreateFlags, ImageCreateFlag, uint32_t)
+
+    enum class ImageTiling : uint32_t {
+        OPTIMAL = 0,
+        LINEAR = 1
+    };
+
+    enum class ImageViewType {
+
+    };
 }

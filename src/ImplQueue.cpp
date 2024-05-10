@@ -243,35 +243,24 @@ namespace WilloRHI
 
             DeletionQueues* deletionQueues = (DeletionQueues*)cmdList.GetDeletionQueue();
 
-            // image
-            ImageId imageHandle{};
-            while (deletionQueues->imageQueue.try_dequeue(imageHandle)) {
-                ImageResource& rsrc = resources->images.At(imageHandle.id);
-                vmaDestroyImage((VmaAllocator)_device.GetAllocator(), rsrc.image, rsrc.allocation);
-                resources->images.freeSlotQueue.enqueue(imageHandle.id);
-            }
-
-            // image view
-            ImageViewId viewHandle{};
-            while (deletionQueues->imageViewQueue.try_dequeue(viewHandle)) {
-                ImageViewResource& rsrc = resources->imageViews.At(viewHandle.id);
-                vkDestroyImageView(_vkDevice, rsrc.imageView, nullptr);
-                resources->imageViews.freeSlotQueue.enqueue(viewHandle.id);
-            }
-
-            // sampler
-            SamplerId samplerHandle{};
-            while (deletionQueues->samplerQueue.try_dequeue(samplerHandle)) {
-                SamplerResource& rsrc = resources->samplers.At(samplerHandle.id);
-                vkDestroySampler(_vkDevice, rsrc.sampler, nullptr);
-                resources->samplers.freeSlotQueue.enqueue(samplerHandle.id);
-            }
-
             BufferId bufferHandle{};
             while (deletionQueues->bufferQueue.try_dequeue(bufferHandle)) {
-                BufferResource& rsrc = resources->buffers.At(bufferHandle.id);
-                vmaDestroyBuffer((VmaAllocator)_device.GetAllocator(), rsrc.buffer, rsrc.allocation);
-                resources->buffers.freeSlotQueue.enqueue(bufferHandle.id);
+                _device.DestroyBuffer(bufferHandle);
+            }
+
+            ImageId imageHandle{};
+            while (deletionQueues->imageQueue.try_dequeue(imageHandle)) {
+                _device.DestroyImage(imageHandle);
+            }
+
+            ImageViewId viewHandle{};
+            while (deletionQueues->imageViewQueue.try_dequeue(viewHandle)) {
+                _device.DestroyImageView(viewHandle);
+            }
+
+            SamplerId samplerHandle{};
+            while (deletionQueues->samplerQueue.try_dequeue(samplerHandle)) {
+                _device.DestroySampler(samplerHandle);
             }
 
             vkResetCommandBuffer((VkCommandBuffer)cmdList.GetNativeHandle(), 0);

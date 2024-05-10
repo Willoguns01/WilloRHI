@@ -2,6 +2,10 @@
 
 namespace WilloRHI
 {
+    void ImplCommandList::Init() {
+        _resources = static_cast<DeviceResources*>(_device.GetDeviceResources());
+    }
+
     void CommandList::Begin() { impl->Begin(); }
     void ImplCommandList::Begin()
     {
@@ -58,16 +62,17 @@ namespace WilloRHI
             .layerCount = barrierInfo.subresourceRange.numLayers
         };
 
-        VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
+        ImageResource& imageResource = _resources->images.At(image);
+        VkImage vkImage = imageResource.image;
 
         VkImageMemoryBarrier2 imageBarrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .pNext = nullptr,
-            .srcStageMask = static_cast<VkPipelineStageFlagBits2>(barrierInfo.srcStage),
-            .srcAccessMask = static_cast<VkAccessFlagBits2>(barrierInfo.srcAccess),
+            .srcStageMask = static_cast<VkPipelineStageFlagBits2>(imageResource.currentPipelineStage),
+            .srcAccessMask = static_cast<VkAccessFlagBits2>(imageResource.currentAccessFlags),
             .dstStageMask = static_cast<VkPipelineStageFlagBits2>(barrierInfo.dstStage),
             .dstAccessMask = static_cast<VkAccessFlagBits2>(barrierInfo.dstAccess),
-            .oldLayout = static_cast<VkImageLayout>(barrierInfo.srcLayout),
+            .oldLayout = static_cast<VkImageLayout>(imageResource.currentLayout),
             .newLayout = static_cast<VkImageLayout>(barrierInfo.dstLayout),
             .image = vkImage,
             .subresourceRange = resourceRange
@@ -81,6 +86,123 @@ namespace WilloRHI
         };
 
         vkCmdPipelineBarrier2(_vkCommandBuffer, &depInfo);
+
+        imageResource.currentLayout = static_cast<VkImageLayout>(barrierInfo.dstLayout);
+        imageResource.currentAccessFlags = static_cast<VkAccessFlagBits2>(barrierInfo.dstAccess);
+        imageResource.currentPipelineStage = static_cast<VkPipelineStageFlagBits2>(barrierInfo.dstStage);
+    }
+
+    void CommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) {
+        impl->CopyImage(srcImage, dstImage, numRegions, regions); }
+    void ImplCommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) 
+    {
+        ImageResource& srcResource = _resources->images.At(srcImage);
+        ImageResource& dstResource = _resources->images.At(dstImage);
+
+        // TODO: test performance std::vector.resize vs. alloc on heap
+        //VkImageCopy* vkRegions = new VkImageCopy[numRegions];
+        std::vector<VkImageCopy> vkRegions;
+        vkRegions.resize(numRegions);
+
+        VkImageAspectFlags srcAspect = (static_cast<VkImageLayout>(srcResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+        VkImageAspectFlags dstAspect = (static_cast<VkImageLayout>(dstResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+        
+        for (uint32_t i = 0; i < numRegions; i++) {
+            vkRegions[i] = {
+                .srcSubresource = {
+                    .aspectMask = srcAspect,
+                    .mipLevel = regions[i].srcSubresource.level,
+                    .baseArrayLayer = regions[i].srcSubresource.baseLayer,
+                    .layerCount = regions[i].srcSubresource.numLayers
+                },
+                .srcOffset = {regions[i].srcOffset.x,regions[i].srcOffset.y,regions[i].srcOffset.z},
+                .dstSubresource = {
+                    .aspectMask = dstAspect,
+                    .mipLevel = regions[i].dstSubresource.level,
+                    .baseArrayLayer = regions[i].dstSubresource.baseLayer,
+                    .layerCount = regions[i].dstSubresource.numLayers
+                },
+                .dstOffset = {regions[i].dstOffset.x,regions[i].dstOffset.y,regions[i].dstOffset.z},
+                .extent = {regions[i].extent.width,regions[i].extent.height,regions[i].extent.depth,}
+            };
+        }
+
+        vkCmdCopyImage(_vkCommandBuffer, 
+            srcResource.image, srcResource.currentLayout,
+            dstResource.image, dstResource.currentLayout,
+            numRegions, vkRegions.data());
+    }
+
+    void CommandList::CopyBufferToImage(BufferId srcBuffer, ImageId dstImage, uint32_t numRegions, BufferImageCopyRegion* regions) {
+        impl->CopyBufferToImage(srcBuffer, dstImage, numRegions, regions); }
+    void ImplCommandList::CopyBufferToImage(BufferId srcBuffer, ImageId dstImage, uint32_t numRegions, BufferImageCopyRegion* regions) 
+    {
+        BufferResource& srcResource = _resources->buffers.At(srcBuffer);
+        ImageResource& dstResource = _resources->images.At(dstImage);
+
+        std::vector<VkBufferImageCopy> vkRegions;
+        vkRegions.resize(numRegions);
+
+        VkImageAspectFlags dstAspect = (static_cast<VkImageLayout>(dstResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+
+        for (uint32_t i = 0; i < numRegions; i++) {
+            vkRegions[i] = {
+                .bufferOffset = regions[i].bufferOffset,
+                .bufferRowLength = regions[i].rowLength,
+                .bufferImageHeight = regions[i].imageHeight,
+                .imageSubresource = {
+                    .aspectMask = dstAspect,
+                    .mipLevel = regions[i].dstSubresource.level,
+                    .baseArrayLayer = regions[i].dstSubresource.baseLayer,
+                    .layerCount = regions[i].dstSubresource.numLayers
+                },
+                .imageOffset = {regions[i].dstOffset.x, regions[i].dstOffset.y, regions[i].dstOffset.z},
+                .imageExtent = {regions[i].extent.width, regions[i].extent.height, regions[i].extent.depth}
+            };
+        }
+
+        vkCmdCopyBufferToImage(_vkCommandBuffer, 
+            srcResource.buffer, dstResource.image, dstResource.currentLayout,
+            numRegions, vkRegions.data());
+    }
+
+    void CommandList::CopyBuffer(BufferId srcBuffer, BufferId dstBuffer, uint32_t numRegions, BufferCopyRegion* regions) {
+        impl->CopyBuffer(srcBuffer, dstBuffer, numRegions, regions); }
+    void ImplCommandList::CopyBuffer(BufferId srcBuffer, BufferId dstBuffer, uint32_t numRegions, BufferCopyRegion* regions)
+    {
+        BufferResource& srcResource = _resources->buffers.At(srcBuffer);
+        BufferResource& dstResource = _resources->buffers.At(dstBuffer);
+
+        std::vector<VkBufferCopy> vkRegions;
+        vkRegions.resize(numRegions);
+
+        for (uint32_t i = 0; i < numRegions; i++) {
+            vkRegions[i] = {
+                .srcOffset = regions[i].srcOffset,
+                .dstOffset = regions[i].dstOffset,
+                .size = regions[i].size
+            };
+        }
+    }
+
+    void CommandList::DestroyBuffer(BufferId buffer) { impl->DestroyBuffer(buffer); }
+    void ImplCommandList::DestroyBuffer(BufferId buffer) {
+        _deletionQueues.bufferQueue.enqueue(buffer);
+    }
+    
+    void CommandList::DestroyImage(BufferId buffer) { impl->DestroyImage(buffer); }
+    void ImplCommandList::DestroyImage(BufferId buffer) {
+        _deletionQueues.imageQueue.enqueue(buffer);
+    }
+
+    void CommandList::DestroyImageView(BufferId buffer) { impl->DestroyImageView(buffer); }
+    void ImplCommandList::DestroyImageView(BufferId buffer) {
+        _deletionQueues.imageViewQueue.enqueue(buffer);
+    }
+
+    void CommandList::DestroySampler(BufferId buffer) { impl->DestroySampler(buffer); }
+    void ImplCommandList::DestroySampler(BufferId buffer) {
+        _deletionQueues.samplerQueue.enqueue(buffer);
     }
 
     void* CommandList::GetNativeHandle() const { return impl->GetNativeHandle(); }
@@ -103,5 +225,6 @@ namespace WilloRHI
         impl->_device = device;
         impl->_threadId = threadId;
         impl->_vkCommandBuffer = (VkCommandBuffer)nativeHandle;
+        impl->Init();
     }
 }
