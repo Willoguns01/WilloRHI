@@ -35,7 +35,7 @@ namespace WilloRHI
         VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
 
         VkImageSubresourceRange resourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = _resources->images.At(image).aspect,
             .baseMipLevel = subresourceRange.baseLevel,
             .levelCount = subresourceRange.numLevels,
             .baseArrayLayer = subresourceRange.baseLayer,
@@ -53,9 +53,8 @@ namespace WilloRHI
     // we flush them all with a single call
     void ImplCommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo)
     {
-        VkImageAspectFlags aspectMask = (static_cast<VkImageLayout>(barrierInfo.dstLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
         VkImageSubresourceRange resourceRange = {
-            .aspectMask = aspectMask,
+            .aspectMask = _resources->images.At(image).aspect,
             .baseMipLevel = barrierInfo.subresourceRange.baseLevel,
             .levelCount = barrierInfo.subresourceRange.numLevels,
             .baseArrayLayer = barrierInfo.subresourceRange.baseLayer,
@@ -82,7 +81,7 @@ namespace WilloRHI
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .pNext = nullptr,
             .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers = &imageBarrier
+            .pImageMemoryBarriers = &imageBarrier,
         };
 
         vkCmdPipelineBarrier2(_vkCommandBuffer, &depInfo);
@@ -104,20 +103,17 @@ namespace WilloRHI
         std::vector<VkImageCopy> vkRegions;
         vkRegions.resize(numRegions);
 
-        VkImageAspectFlags srcAspect = (static_cast<VkImageLayout>(srcResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        VkImageAspectFlags dstAspect = (static_cast<VkImageLayout>(dstResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        
         for (uint32_t i = 0; i < numRegions; i++) {
             vkRegions[i] = {
                 .srcSubresource = {
-                    .aspectMask = srcAspect,
+                    .aspectMask = srcResource.aspect,
                     .mipLevel = regions[i].srcSubresource.level,
                     .baseArrayLayer = regions[i].srcSubresource.baseLayer,
                     .layerCount = regions[i].srcSubresource.numLayers
                 },
                 .srcOffset = {regions[i].srcOffset.x,regions[i].srcOffset.y,regions[i].srcOffset.z},
                 .dstSubresource = {
-                    .aspectMask = dstAspect,
+                    .aspectMask = dstResource.aspect,
                     .mipLevel = regions[i].dstSubresource.level,
                     .baseArrayLayer = regions[i].dstSubresource.baseLayer,
                     .layerCount = regions[i].dstSubresource.numLayers
@@ -143,15 +139,13 @@ namespace WilloRHI
         std::vector<VkBufferImageCopy> vkRegions;
         vkRegions.resize(numRegions);
 
-        VkImageAspectFlags dstAspect = (static_cast<VkImageLayout>(dstResource.currentLayout) == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-
         for (uint32_t i = 0; i < numRegions; i++) {
             vkRegions[i] = {
                 .bufferOffset = regions[i].bufferOffset,
                 .bufferRowLength = regions[i].rowLength,
                 .bufferImageHeight = regions[i].imageHeight,
                 .imageSubresource = {
-                    .aspectMask = dstAspect,
+                    .aspectMask = dstResource.aspect,
                     .mipLevel = regions[i].dstSubresource.level,
                     .baseArrayLayer = regions[i].dstSubresource.baseLayer,
                     .layerCount = regions[i].dstSubresource.numLayers

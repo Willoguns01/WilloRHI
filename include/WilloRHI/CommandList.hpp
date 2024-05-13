@@ -9,21 +9,6 @@
 
 namespace WilloRHI
 {
-    struct ImageSubresourceRange 
-    {
-        uint32_t baseLevel = 0;
-        uint32_t numLevels = 1;
-        uint32_t baseLayer = 0;
-        uint32_t numLayers = 1;
-    };
-
-    struct ImageSubresourceLayers
-    {
-        uint32_t level = 0;
-        uint32_t baseLayer = 0;
-        uint32_t numLayers = 1;
-    };
-
     struct ImageMemoryBarrierInfo
     {
         PipelineStageFlags dstStage = PipelineStageFlag::NONE;

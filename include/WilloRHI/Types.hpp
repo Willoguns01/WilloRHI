@@ -45,6 +45,21 @@ namespace WilloRHI
         Extent2D extent = {};
     };
 
+    struct ImageSubresourceRange 
+    {
+        uint32_t baseLevel = 0;
+        uint32_t numLevels = 1;
+        uint32_t baseLayer = 0;
+        uint32_t numLayers = 1;
+    };
+
+    struct ImageSubresourceLayers
+    {
+        uint32_t level = 0;
+        uint32_t baseLayer = 0;
+        uint32_t numLayers = 1;
+    };
+
     enum class Format : uint32_t {
         UNDEFINED = 0,
         R4G4_UNORM_PACK8 = 1,
@@ -353,12 +368,12 @@ namespace WilloRHI
     };
 
     enum class ImageUsageFlag : uint32_t {
-        TRANSFER_SRC_BIT = 0x00000001,
-        TRANSFER_DST_BIT = 0x00000002,
-        SAMPLED_BIT = 0x00000004,
-        STORAGE_BIT = 0x00000008,
-        COLOR_ATTACHMENT_BIT = 0x00000010,
-        DEPTH_STENCIL_ATTACHMENT_BIT = 0x00000020,
+        TRANSFER_SRC = 0x00000001,
+        TRANSFER_DST = 0x00000002,
+        SAMPLED = 0x00000004,
+        STORAGE = 0x00000008,
+        COLOR_ATTACHMENT = 0x00000010,
+        DEPTH_STENCIL_ATTACHMENT = 0x00000020,
     };
     WilloRHI_DECLARE_FLAG_TYPE(ImageUsageFlags, ImageUsageFlag, uint32_t)
 
@@ -384,6 +399,12 @@ namespace WilloRHI
     };
 
     enum class ImageViewType {
-
+        VIEW_TYPE_1D = 0,
+        VIEW_TYPE_2D = 1,
+        VIEW_TYPE_3D = 2,
+        VIEW_TYPE_CUBE = 3,
+        VIEW_TYPE_1D_ARRAY = 4,
+        VIEW_TYPE_2D_ARRAY = 5,
+        VIEW_TYPE_CUBE_ARRAY = 6,
     };
 }

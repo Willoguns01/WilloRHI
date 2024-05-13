@@ -429,6 +429,7 @@ namespace WilloRHI
 
         newImage.mappedAddress = newAllocation.pMappedData;
         newImage.createInfo = createInfo;
+        newImage.aspect = AspectFromFormat(createInfo.format);
 
         _resources.images.At(imageSlot) = newImage;
 
@@ -441,11 +442,83 @@ namespace WilloRHI
         return impl->CreateImageView(createInfo); }
     ImageViewId ImplDevice::CreateImageView(const ImageViewCreateInfo& createInfo)
     {
+        ImageResource& imageRsrc = _resources.images.At(createInfo.image);
+        uint64_t viewSlot = _resources.imageViews.Allocate();
+        ImageViewResource newImageView = {};
+        newImageView.createInfo = createInfo;
+
         VkImageViewCreateInfo vkImageViewInfo = {
-            
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .image = imageRsrc.image,
+            .viewType = static_cast<VkImageViewType>(createInfo.viewType),
+            .format = static_cast<VkFormat>(createInfo.format),
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange = {
+                .aspectMask = AspectFromFormat(createInfo.format),
+                .baseMipLevel = createInfo.subresource.baseLevel,
+                .levelCount = createInfo.subresource.numLevels,
+                .baseArrayLayer = createInfo.subresource.baseLayer,
+                .layerCount = createInfo.subresource.numLayers
+            }
         };
 
-        return {};
+        vkCreateImageView(_vkDevice, &vkImageViewInfo, nullptr, &newImageView.imageView);
+
+        _resources.imageViews.At(viewSlot) = newImageView;
+
+        uint32_t numWrites = 0;
+        VkWriteDescriptorSet descWrites[2] = {};
+
+        if (imageRsrc.createInfo.usageFlags & ImageUsageFlag::STORAGE) {
+            VkDescriptorImageInfo storageImageDescriptor = {
+                .sampler = VK_NULL_HANDLE,
+                .imageView = newImageView.imageView,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+            };
+
+            descWrites[numWrites++] = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = nullptr,
+                .dstSet = _globalDescriptors.descriptorSet,
+                .dstBinding = WilloRHI_STORAGE_IMAGE_BINDING,
+                .dstArrayElement = (uint32_t)viewSlot,
+                .descriptorCount = 1,
+                .pImageInfo = &storageImageDescriptor,
+                .pBufferInfo = nullptr,
+                .pTexelBufferView = nullptr
+            };
+        }
+
+        if (imageRsrc.createInfo.usageFlags & ImageUsageFlag::SAMPLED) {
+            VkDescriptorImageInfo sampledImageDescriptor = {
+                .sampler = VK_NULL_HANDLE,
+                .imageView = newImageView.imageView,
+                .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL
+            };
+
+            descWrites[numWrites++] = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = nullptr,
+                .dstSet = _globalDescriptors.descriptorSet,
+                .dstBinding = WilloRHI_SAMPLED_IMAGE_BINDING,
+                .dstArrayElement = (uint32_t)viewSlot,
+                .descriptorCount = 1,
+                .pImageInfo = &sampledImageDescriptor,
+                .pBufferInfo = nullptr,
+                .pTexelBufferView = nullptr
+            };
+        }
+
+        vkUpdateDescriptorSets(_vkDevice, numWrites, descWrites, 0, nullptr);
+
+        return viewSlot;
     }
 
     SamplerId Device::CreateSampler(const SamplerCreateInfo& createInfo) {

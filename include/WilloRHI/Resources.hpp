@@ -30,7 +30,10 @@ namespace WilloRHI
     };
 
     struct ImageViewCreateInfo {
-
+        ImageId image = 0;
+        ImageViewType viewType = ImageViewType::VIEW_TYPE_2D;
+        Format format = Format::UNDEFINED;
+        ImageSubresourceRange subresource = {};
     };
 
     struct SamplerCreateInfo {

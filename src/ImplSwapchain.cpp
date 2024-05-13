@@ -58,15 +58,21 @@ namespace WilloRHI
 
         std::vector<VkImage> vkImages = vkbSwapchain.get_images().value();
 
-        _images.reserve((size_t)createInfo.framesInFlight);
+        _images.resize((size_t)createInfo.framesInFlight);
 
         DeviceResources* resources = (DeviceResources*)device.GetDeviceResources();
 
         for (uint32_t i = 0; i < createInfo.framesInFlight; i++)
         {
             uint64_t imageId = resources->images.Allocate();
-            resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
-            _images.push_back(ImageId{imageId});
+
+            ImageResource resource = {
+                .image = vkImages.at(i),
+                .aspect = VK_IMAGE_ASPECT_COLOR_BIT
+            };
+
+            resources->images.At(imageId) = resource;
+            _images.at(i) = ImageId{imageId};
 
             _imageSync.push_back(WilloRHI::BinarySemaphore::Create(pDevice));
         }
@@ -207,7 +213,12 @@ namespace WilloRHI
             resources->images.Free(_images.at(i));
             uint64_t imageId = resources->images.Allocate();
 
-            resources->images.At(imageId) = {.image = vkImages[i], .allocation = VK_NULL_HANDLE, .createInfo = {}};
+            ImageResource resource = {
+                .image = vkImages.at(i),
+                .aspect = VK_IMAGE_ASPECT_COLOR_BIT
+            };
+
+            resources->images.At(imageId) = resource;
             _images.at(i) = ImageId{imageId};
         }
 

@@ -41,6 +41,7 @@ namespace WilloRHI
         VkPipelineStageFlags2 currentPipelineStage = VK_PIPELINE_STAGE_2_NONE;
         VkAccessFlags2 currentAccessFlags = VK_ACCESS_2_NONE;
         VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageAspectFlags aspect = VK_IMAGE_ASPECT_NONE;
     };
 
     struct ImageViewResource {
@@ -87,7 +88,6 @@ namespace WilloRHI
         uint64_t Allocate() {
             uint64_t newSlot = 0;
             freeSlotQueue.try_dequeue(newSlot);
-            assert((newSlot != 0) && "Ran out of resource slots");
             return newSlot;
         }
 
@@ -120,4 +120,8 @@ namespace WilloRHI
         QueueType<ImageViewId> imageViewQueue = QueueType<ImageViewId>();
         QueueType<SamplerId> samplerQueue = QueueType<SamplerId>();
     };
+
+    bool IsDepthFormat(Format format);
+    bool IsStencilFormat(Format format);
+    VkImageAspectFlags AspectFromFormat(Format format);
 }

@@ -25,21 +25,21 @@ int main()
     // just roll with the defaults
     WilloRHI::ResourceCountInfo countInfo = {};
 
-    //WilloRHI::DeviceCreateInfo deviceInfo = {
-    //    .applicationName = "01_Initialization",
-    //    .validationLayers = true,
-    //    .logCallback = &OutputMessage,
-    //    .logInfo = true,
-    //    .resourceCounts = countInfo
-    //};
-
     WilloRHI::DeviceCreateInfo deviceInfo = {
         .applicationName = "01_Initialization",
-        .validationLayers = false,
-        .logCallback = nullptr,
-        .logInfo = false,
+        .validationLayers = true,
+        .logCallback = &OutputMessage,
+        .logInfo = true,
         .resourceCounts = countInfo
     };
+
+    //WilloRHI::DeviceCreateInfo deviceInfo = {
+    //    .applicationName = "01_Initialization",
+    //    .validationLayers = false,
+    //    .logCallback = nullptr,
+    //    .logInfo = false,
+    //    .resourceCounts = countInfo
+    //};
 
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
