@@ -469,7 +469,7 @@ namespace WilloRHI
             }
         };
 
-        vkCreateImageView(_vkDevice, &vkImageViewInfo, nullptr, &newImageView.imageView);
+        ErrorCheck(vkCreateImageView(_vkDevice, &vkImageViewInfo, nullptr, &newImageView.imageView));
 
         _resources.imageViews.At(viewSlot) = newImageView;
 
@@ -525,7 +525,62 @@ namespace WilloRHI
         return impl->CreateSampler(createInfo); }
     SamplerId ImplDevice::CreateSampler(const SamplerCreateInfo& createInfo)
     {
-        return {};
+        SamplerResource newSampler = {};
+        uint64_t samplerSlot = _resources.samplers.Allocate();
+        newSampler.createInfo = createInfo;
+
+        VkSamplerReductionModeCreateInfo vkReductionMode = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
+            .pNext = nullptr,
+            .reductionMode = static_cast<VkSamplerReductionMode>(createInfo.reductionMode)
+        };
+
+        VkSamplerCreateInfo vkSamplerInfo = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .magFilter = static_cast<VkFilter>(createInfo.magFilter),
+            .minFilter = static_cast<VkFilter>(createInfo.minFilter),
+            .mipmapMode = static_cast<VkSamplerMipmapMode>(createInfo.mipFilter),
+            .addressModeU = static_cast<VkSamplerAddressMode>(createInfo.addressModeU),
+            .addressModeV = static_cast<VkSamplerAddressMode>(createInfo.addressModeV),
+            .addressModeW = static_cast<VkSamplerAddressMode>(createInfo.addressModeW),
+            .mipLodBias = createInfo.lodBias,
+            .anisotropyEnable = createInfo.anisotropyEnable,
+            .maxAnisotropy = createInfo.maxAnisotropy,
+            .compareEnable = createInfo.compareOpEnable,
+            .compareOp = static_cast<VkCompareOp>(createInfo.compareOp),
+            .minLod = createInfo.minLod,
+            .maxLod = createInfo.maxLod,
+            .borderColor = static_cast<VkBorderColor>(createInfo.borderColour),
+            .unnormalizedCoordinates = createInfo.unnormalizedCoordinates
+        };
+
+        ErrorCheck(vkCreateSampler(_vkDevice, &vkSamplerInfo, nullptr, &newSampler.sampler));
+
+        _resources.samplers.At(samplerSlot) = newSampler;
+
+        VkDescriptorImageInfo samplerDescriptor = {
+            .sampler = newSampler.sampler,
+            .imageView = nullptr,
+            .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        };
+
+        VkWriteDescriptorSet descriptorWrite = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = nullptr,
+            .dstSet = _globalDescriptors.descriptorSet,
+            .dstBinding = WilloRHI_SAMPLER_BINDING,
+            .dstArrayElement = (uint32_t)samplerSlot,
+            .descriptorCount = 1,
+            .pImageInfo = &samplerDescriptor,
+            .pBufferInfo = nullptr,
+            .pTexelBufferView = nullptr
+        };
+
+        vkUpdateDescriptorSets(_vkDevice, 1, &descriptorWrite, 0, nullptr);
+
+        return samplerSlot;
     }
 
     void* Device::GetBufferPointer(BufferId buffer) { return impl->GetBufferPointer(buffer); }

@@ -332,7 +332,7 @@ namespace WilloRHI
         FRAGMENT_SHADER_BIT = 0x00000080ULL,
         EARLY_FRAGMENT_TESTS_BIT = 0x00000100ULL,
         LATE_FRAGMENT_TESTS_BIT = 0x00000200ULL,
-        COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400ULL,
+        COLOUR_ATTACHMENT_OUTPUT_BIT = 0x00000400ULL,
         COMPUTE_SHADER_BIT = 0x00000800ULL,
         TRANSFER_BIT = 0x00001000ULL,
         BOTTOM_OF_PIPE_BIT = 0x00002000ULL,
@@ -372,7 +372,7 @@ namespace WilloRHI
         TRANSFER_DST = 0x00000002,
         SAMPLED = 0x00000004,
         STORAGE = 0x00000008,
-        COLOR_ATTACHMENT = 0x00000010,
+        COLOUR_ATTACHMENT = 0x00000010,
         DEPTH_STENCIL_ATTACHMENT = 0x00000020,
     };
     WilloRHI_DECLARE_FLAG_TYPE(ImageUsageFlags, ImageUsageFlag, uint32_t)
@@ -398,7 +398,7 @@ namespace WilloRHI
         LINEAR = 1
     };
 
-    enum class ImageViewType {
+    enum class ImageViewType : uint32_t {
         VIEW_TYPE_1D = 0,
         VIEW_TYPE_2D = 1,
         VIEW_TYPE_3D = 2,
@@ -406,5 +406,44 @@ namespace WilloRHI
         VIEW_TYPE_1D_ARRAY = 4,
         VIEW_TYPE_2D_ARRAY = 5,
         VIEW_TYPE_CUBE_ARRAY = 6,
+    };
+
+    enum class Filter : uint32_t {
+        NEAREST = 0,
+        LINEAR = 1
+    };
+
+    enum class ReductionMode : uint32_t {
+        WEIGHTED_AVERAGE = 0,
+        MIN = 1,
+        MAX = 2
+    };
+
+    enum class SamplerAddressMode : uint32_t {
+        REPEAT = 0,
+        MIRRORED_REPEAT = 1,
+        CLAMP_EDGE = 2,
+        CLAMP_BORDER = 3,
+        MIRROR_CLAMP_EDGE = 4
+    };
+
+    enum class CompareOp : uint32_t {
+        NEVER = 0,
+        LESS = 1,
+        EQUAL = 2,
+        LESS_OR_EQUAL = 3,
+        GREATER = 4,
+        NOT_EQUAL = 5,
+        GREATER_OR_EQUAL = 6,
+        ALWAYS = 7,
+    };
+
+    enum class BorderColour : uint32_t {
+        FLOAT_TRANSPARENT_BLACK = 0,
+        INT_TRANSPARENT_BLACK = 1,
+        FLOAT_OPAQUE_BLACK = 2,
+        INT_OPAQUE_BLACK = 3,
+        FLOAT_OPAQUE_WHITE = 4,
+        INT_OPAQUE_WHITE = 5,
     };
 }

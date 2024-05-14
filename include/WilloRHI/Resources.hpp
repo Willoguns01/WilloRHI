@@ -11,6 +11,8 @@ namespace WilloRHI
     typedef uint64_t ImageViewId;
     typedef uint64_t SamplerId;
 
+    constexpr float LOD_CLAMP_NONE  = 1000.0F;
+
     // createinfo structures
     struct BufferCreateInfo {
         uint64_t size = 0;
@@ -37,6 +39,21 @@ namespace WilloRHI
     };
 
     struct SamplerCreateInfo {
-
+        Filter magFilter = Filter::LINEAR;
+        Filter minFilter = Filter::LINEAR;
+        Filter mipFilter = Filter::LINEAR;
+        ReductionMode reductionMode = ReductionMode::WEIGHTED_AVERAGE;
+        SamplerAddressMode addressModeU = SamplerAddressMode::CLAMP_EDGE;
+        SamplerAddressMode addressModeV = SamplerAddressMode::CLAMP_EDGE;
+        SamplerAddressMode addressModeW = SamplerAddressMode::CLAMP_EDGE;
+        float lodBias = 0.0f;
+        bool anisotropyEnable = false;
+        float maxAnisotropy = 0.0f;
+        bool compareOpEnable = false;
+        CompareOp compareOp = CompareOp::ALWAYS;
+        float minLod = 0.0f;
+        float maxLod = LOD_CLAMP_NONE;
+        BorderColour borderColour = BorderColour::FLOAT_TRANSPARENT_BLACK;
+        bool unnormalizedCoordinates = false;
     };
 }
