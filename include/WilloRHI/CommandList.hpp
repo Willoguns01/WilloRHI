@@ -51,11 +51,24 @@ namespace WilloRHI
         void Begin();
         void End();
 
-        void ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange);
+        void PushConstants(uint32_t offset, uint32_t size, void* data);
 
+        // barriers
         void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
 
+        // pipelines
+        void BindComputePipeline(ComputePipeline pipeline);
+        void BindGraphicsPipeline(GraphicsPipeline pipeline);
+
+        // compute dispatch
+        void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
+        // drawing commands
+        void ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange);
+
+        // copy commands
         void CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions);
+        void BlitImage(ImageId srcImage, ImageId dstImage, Filter filter);
         void CopyBufferToImage(BufferId srcBuffer, ImageId dstImage, uint32_t numRegions, BufferImageCopyRegion* regions);
         void CopyBuffer(BufferId srcBuffer, BufferId dstBuffer, uint32_t numRegions, BufferCopyRegion* regions);
 

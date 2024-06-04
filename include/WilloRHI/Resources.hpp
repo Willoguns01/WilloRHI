@@ -6,10 +6,10 @@
 
 namespace WilloRHI
 {
-    typedef uint64_t BufferId;
-    typedef uint64_t ImageId;
-    typedef uint64_t ImageViewId;
-    typedef uint64_t SamplerId;
+    typedef uint32_t BufferId;
+    typedef uint32_t ImageId;
+    typedef uint32_t ImageViewId;
+    typedef uint32_t SamplerId;
 
     constexpr float LOD_CLAMP_NONE  = 1000.0F;
 

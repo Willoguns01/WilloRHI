@@ -28,29 +28,15 @@ namespace WilloRHI
         vkEndCommandBuffer(_vkCommandBuffer);
     }
 
-    void CommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange) {
-        impl->ClearImage(image, clearColour, subresourceRange); }
-    void ImplCommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange)
-    {
-        VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
-
-        VkImageSubresourceRange resourceRange = {
-            .aspectMask = _resources->images.At(image).aspect,
-            .baseMipLevel = subresourceRange.baseLevel,
-            .levelCount = subresourceRange.numLevels,
-            .baseArrayLayer = subresourceRange.baseLayer,
-            .layerCount = subresourceRange.numLayers
-        };
-
-        VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
-        vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
+    void CommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
+        impl->PushConstants(offset, size, data); }
+    void ImplCommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
+        vkCmdPushConstants(_vkCommandBuffer, _currentPipelineLayout, VK_SHADER_STAGE_ALL, offset, size, data);
     }
 
     void CommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo) {
         impl->TransitionImageLayout(image, barrierInfo); }
-    // TODO: we should "queue" barriers,
-    // then once we run some other kind of cmd,
-    // we flush them all with a single call
+    // TODO: barriers should be piled together and flushed all at once when necessary
     void ImplCommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo)
     {
         VkImageSubresourceRange resourceRange = {
@@ -91,6 +77,63 @@ namespace WilloRHI
         imageResource.currentPipelineStage = static_cast<VkPipelineStageFlagBits2>(barrierInfo.dstStage);
     }
 
+    void CommandList::BindComputePipeline(ComputePipeline pipeline) {
+        impl->BindComputePipeline(pipeline); }
+    void ImplCommandList::BindComputePipeline(ComputePipeline pipeline) {
+        _currentPipeline = VK_PIPELINE_BIND_POINT_COMPUTE;
+        _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
+        vkCmdBindDescriptorSets(
+            _vkCommandBuffer,
+            VK_PIPELINE_BIND_POINT_COMPUTE,
+            static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout()),
+            0, 1,
+            &static_cast<GlobalDescriptors*>(_device.GetResourceDescriptors())->descriptorSet,
+            0, nullptr
+        );
+        vkCmdBindPipeline(_vkCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, static_cast<VkPipeline>(pipeline.GetPipelineHandle()));
+    }
+
+    void CommandList::BindGraphicsPipeline(GraphicsPipeline pipeline) {
+        impl->BindGraphicsPipeline(pipeline); }
+    void ImplCommandList::BindGraphicsPipeline(GraphicsPipeline pipeline) {
+        _currentPipeline = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
+        vkCmdBindDescriptorSets(
+            _vkCommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout()),
+            0, 1,
+            &static_cast<GlobalDescriptors*>(_device.GetResourceDescriptors())->descriptorSet,
+            0, nullptr
+        );
+        vkCmdBindPipeline(_vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<VkPipeline>(pipeline.GetPipelineHandle()));
+    }
+
+    void CommandList::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) {
+        impl->Dispatch(groupCountX, groupCountY, groupCountZ); }
+    void ImplCommandList::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+    {
+        vkCmdDispatch(_vkCommandBuffer, groupCountX, groupCountY, groupCountZ);
+    }
+
+    void CommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange) {
+        impl->ClearImage(image, clearColour, subresourceRange); }
+    void ImplCommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange)
+    {
+        VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
+
+        VkImageSubresourceRange resourceRange = {
+            .aspectMask = _resources->images.At(image).aspect,
+            .baseMipLevel = subresourceRange.baseLevel,
+            .levelCount = subresourceRange.numLevels,
+            .baseArrayLayer = subresourceRange.baseLayer,
+            .layerCount = subresourceRange.numLayers
+        };
+
+        VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
+        vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
+    }
+
     void CommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) {
         impl->CopyImage(srcImage, dstImage, numRegions, regions); }
     void ImplCommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) 
@@ -127,6 +170,51 @@ namespace WilloRHI
             srcResource.image, srcResource.currentLayout,
             dstResource.image, dstResource.currentLayout,
             numRegions, vkRegions.data());
+    }
+
+    void CommandList::BlitImage(ImageId srcImage, ImageId dstImage, Filter filter) {
+        impl->BlitImage(srcImage, dstImage, filter); }
+    void ImplCommandList::BlitImage(ImageId srcImage, ImageId dstImage, Filter filter)
+    {
+        ImageResource& srcResource = _resources->images.At(srcImage);
+        ImageResource& dstResource = _resources->images.At(dstImage);
+
+        VkImageBlit2 blitRegion = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+            .pNext = nullptr,
+            .srcSubresource = {
+                .aspectMask = srcResource.aspect,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            },
+            .dstSubresource = {
+                .aspectMask = dstResource.aspect,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        };
+        blitRegion.srcOffsets[1].x = srcResource.createInfo.size.width;
+        blitRegion.srcOffsets[1].y = srcResource.createInfo.size.height;
+        blitRegion.srcOffsets[1].z = 1;
+        blitRegion.dstOffsets[1].x = dstResource.createInfo.size.width;
+        blitRegion.dstOffsets[1].y = dstResource.createInfo.size.height;
+        blitRegion.dstOffsets[1].z = 1;
+
+        VkBlitImageInfo2 blitInfo = {
+            .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+            .pNext = nullptr,
+            .srcImage = srcResource.image,
+            .srcImageLayout = srcResource.currentLayout,
+            .dstImage = dstResource.image,
+            .dstImageLayout = dstResource.currentLayout,
+            .regionCount = 1,
+            .pRegions = &blitRegion,
+            .filter = static_cast<VkFilter>(filter)
+        };
+
+        vkCmdBlitImage2(_vkCommandBuffer, &blitInfo);
     }
 
     void CommandList::CopyBufferToImage(BufferId srcBuffer, ImageId dstImage, uint32_t numRegions, BufferImageCopyRegion* regions) {

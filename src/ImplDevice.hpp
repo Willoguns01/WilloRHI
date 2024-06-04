@@ -11,12 +11,6 @@
 namespace WilloRHI
 {
     using NativeWindowHandle = void*;
-
-    struct GlobalDescriptors {
-        VkDescriptorPool pool;
-        VkDescriptorSetLayout setLayout;
-        VkDescriptorSet descriptorSet;
-    };
     
     struct ImplDevice
     {
@@ -85,7 +79,10 @@ namespace WilloRHI
         void* GetImageViewNativeHandle(ImageViewId handle) const;
         void* GetSamplerNativeHandle(SamplerId handle) const;
 
+        void* GetNativeSetLayout() const;
+
         void* GetDeviceResources();
+        void* GetResourceDescriptors();
         void* GetAllocator() const;
     };
 }

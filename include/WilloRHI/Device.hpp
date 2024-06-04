@@ -16,9 +16,9 @@ namespace WilloRHI
     // to reduce memory usage or runtime performance costs of having many descriptors
     struct ResourceCountInfo
     {
-        uint64_t bufferCount = 1u << 20u;
-        uint64_t imageCount = 1u << 20u;
-        uint64_t samplerCount = 1u << 20u;
+        uint32_t bufferCount = 1u << 20u;
+        uint32_t imageCount = 1u << 20u;
+        uint32_t samplerCount = 1u << 20u;
     };
 
     typedef void(*RHILoggingFunc)(const std::string&);
@@ -70,6 +70,7 @@ namespace WilloRHI
         friend ImplSwapchain;
         friend ImplQueue;
         friend ImplCommandList;
+        friend ImplPipelineManager;
         std::shared_ptr<ImplDevice> impl = nullptr;
 
         void LockResources_Shared();
@@ -82,7 +83,10 @@ namespace WilloRHI
         void* GetImageViewNativeHandle(ImageViewId handle) const;
         void* GetSamplerNativeHandle(SamplerId handle) const;
 
+        void* GetNativeSetLayout() const;
+
         void* GetDeviceResources();
+        void* GetResourceDescriptors();
         void* GetAllocator() const;
     };
 }

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 
 #include <WilloRHI/WilloRHI.hpp>
 
@@ -11,6 +12,26 @@ static void OutputMessage(const std::string& message) {
 }
 
 constexpr int FRAME_OVERLAP = 3;
+
+struct FrameResource {
+    WilloRHI::BinarySemaphore renderSemaphore;
+    FrameResource(WilloRHI::Device device) {
+        renderSemaphore = WilloRHI::BinarySemaphore::Create(device);
+    }
+};
+
+struct RenderingResources {
+    std::vector<FrameResource> frames;
+    WilloRHI::TimelineSemaphore timelineSemaphore;
+    uint64_t frameNum = FRAME_OVERLAP;
+
+    RenderingResources(WilloRHI::Device device) {
+        timelineSemaphore = WilloRHI::TimelineSemaphore::Create(device, FRAME_OVERLAP);
+        for (uint64_t i = 0; i < frameNum; i++) {
+            frames.push_back(FrameResource(device));
+        }
+    }
+};
 
 int main()
 {
@@ -53,51 +74,130 @@ int main()
     };
 
     WilloRHI::Swapchain swapchain = WilloRHI::Swapchain::Create(device, swapchainInfo);
-
-    std::vector<WilloRHI::BinarySemaphore> renderSemaphores;
-    for (int i = 0; i < FRAME_OVERLAP; i++) {
-        renderSemaphores.push_back(WilloRHI::BinarySemaphore::Create(device));
-    }
-
-    WilloRHI::TimelineSemaphore gpuTimeline = WilloRHI::TimelineSemaphore::Create(device, FRAME_OVERLAP);
-    uint64_t frameNum = FRAME_OVERLAP;
-
     WilloRHI::Queue graphicsQueue = WilloRHI::Queue::Create(device, WilloRHI::QueueType::GRAPHICS);
+
+    RenderingResources renderingResources(device);
+
+    WilloRHI::PipelineManager pipelineManager = WilloRHI::PipelineManager::Create(device);
+
+    // rendering destination
+    WilloRHI::ImageCreateInfo renderImageInfo = {
+        .dimensions = 2,
+        .size = {1280, 720, 1},
+        .numLevels = 1,
+        .numLayers = 1,
+        .format = WilloRHI::Format::R16G16B16A16_SFLOAT,
+        .usageFlags = WilloRHI::ImageUsageFlag::STORAGE | WilloRHI::ImageUsageFlag::TRANSFER_SRC,
+        .createFlags = {},
+        .allocationFlags = {},
+        .tiling = WilloRHI::ImageTiling::OPTIMAL
+    };
+
+    WilloRHI::ImageId renderingImage = device.CreateImage(renderImageInfo);
+
+    WilloRHI::ImageViewCreateInfo renderImageViewInfo = {
+        .image = renderingImage,
+        .viewType = WilloRHI::ImageViewType::VIEW_TYPE_2D,
+        .format = WilloRHI::Format::R16G16B16A16_SFLOAT,
+        .subresource = {}
+    };
+
+    WilloRHI::ImageViewId renderingImageView = device.CreateImageView(renderImageViewInfo);
+
+    // compute shader
+
+    std::ifstream file("shaders/test_compute.spv", std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        std::cout << "Failed to open shader file\n";
+    }
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<uint32_t> spirvBuffer;
+    spirvBuffer.resize(fileSize / sizeof(uint32_t));
+    file.seekg(0);
+    file.read((char*)spirvBuffer.data(), fileSize);
+    file.close();
+
+    WilloRHI::ShaderModuleInfo moduleInfo = {
+        .byteCode = spirvBuffer.data(),
+        .codeSize = (uint32_t)fileSize,// * sizeof(uint32_t),
+        .name = "shaders/test_compute.spv"
+    };
+
+    WilloRHI::ShaderModule shaderModule = pipelineManager.CompileModule(moduleInfo);
+
+    struct ComputePushConstants {
+        uint32_t targetTextureIndex;
+    };
+
+    WilloRHI::ComputePipelineInfo pipelineInfo = {
+        .module = shaderModule,
+        .entryPoint = "main",
+        .pushConstantSize = sizeof(ComputePushConstants),
+        .name = "Testing Compute Shader"
+    };
+
+    WilloRHI::ComputePipeline testComputePipeline = pipelineManager.CompileComputePipeline(pipelineInfo);
 
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
         // this is far from optimal resizing, should read up on smooth resize
-        int newWidth, newHeight;
-        glfwGetWindowSize(window, &newWidth, &newHeight);
-        if (newWidth != swapchainInfo.width || newHeight != swapchainInfo.height) {
-            swapchainInfo.width = newWidth;
-            swapchainInfo.height = newHeight;
-            swapchain.Resize(newWidth, newHeight, swapchainInfo.presentMode);
+        int windowWidth, windowHeight;
+        glfwGetWindowSize(window, &windowWidth, &windowHeight);
+        if (windowWidth != swapchainInfo.width || windowHeight != swapchainInfo.height) {
+            swapchainInfo.width = windowWidth;
+            swapchainInfo.height = windowHeight;
+            swapchain.Resize(windowWidth, windowHeight, swapchainInfo.presentMode);
             continue;
         }
 
-        gpuTimeline.WaitValue(frameNum - (FRAME_OVERLAP - 1), 1000000000);
-        frameNum += 1;
+        renderingResources.timelineSemaphore.WaitValue(renderingResources.frameNum - (FRAME_OVERLAP - 1), 1000000000);
+        renderingResources.frameNum += 1;
+
         WilloRHI::ImageId swapchainImage = swapchain.AcquireNextImage();
 
         WilloRHI::CommandList cmdList = graphicsQueue.GetCmdList();
         cmdList.Begin();
 
         WilloRHI::ImageMemoryBarrierInfo barrierInfo = {
-            .dstStage = WilloRHI::PipelineStageFlag::CLEAR_BIT,
+            .dstStage = WilloRHI::PipelineStageFlag::COMPUTE_SHADER,
             .dstAccess = WilloRHI::MemoryAccessFlag::WRITE,
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
             .subresourceRange = {}
         };
-        cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
+        cmdList.TransitionImageLayout(renderingImage, barrierInfo);
 
-        float clearColour[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-        cmdList.ClearImage(swapchainImage, clearColour, barrierInfo.subresourceRange);
+        ComputePushConstants testConstants = {
+            .targetTextureIndex = renderingImageView
+        };
+
+        cmdList.BindComputePipeline(testComputePipeline);
+        cmdList.PushConstants(0, sizeof(ComputePushConstants), (void*)&testConstants);
+        cmdList.Dispatch(std::ceil(1280 / 16), std::ceil(720 / 16), 1);
 
         barrierInfo = {
-            .dstStage = WilloRHI::PipelineStageFlag::ALL_COMMANDS_BIT,
+            .dstStage = WilloRHI::PipelineStageFlag::TRANSFER,
+            .dstAccess = WilloRHI::MemoryAccessFlag::READ,
+            .dstLayout = WilloRHI::ImageLayout::TRANSFER_SRC
+        };
+        cmdList.TransitionImageLayout(renderingImage, barrierInfo);
+
+        barrierInfo = {
+            .dstStage = WilloRHI::PipelineStageFlag::TRANSFER,
+            .dstAccess = WilloRHI::MemoryAccessFlag::WRITE,
+            .dstLayout = WilloRHI::ImageLayout::TRANSFER_DST
+        };
+        cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
+
+        //WilloRHI::ImageCopyRegion copyRegion = {
+        //    .extent = {1280, 720, 1}
+        //};
+        //cmdList.CopyImage(renderingImage, swapchainImage, 1, &copyRegion);
+        cmdList.BlitImage(renderingImage, swapchainImage, WilloRHI::Filter::LINEAR);
+
+        barrierInfo = {
+            .dstStage = WilloRHI::PipelineStageFlag::ALL_GRAPHICS,
             .dstAccess = WilloRHI::MemoryAccessFlag::READ,
             .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
         };
@@ -106,16 +206,16 @@ int main()
         cmdList.End();
 
         WilloRHI::CommandSubmitInfo submitInfo = {
-            .signalTimelineSemaphores = { { gpuTimeline, frameNum } },
+            .signalTimelineSemaphores = { { renderingResources.timelineSemaphore, renderingResources.frameNum } },
             .waitBinarySemaphores = { swapchain.GetAcquireSemaphore() },
-            .signalBinarySemaphores = { renderSemaphores.at(swapchain.GetCurrentImageIndex()) },
+            .signalBinarySemaphores = { renderingResources.frames.at(renderingResources.frameNum % FRAME_OVERLAP).renderSemaphore },
             .commandLists = { cmdList }
         };
 
         graphicsQueue.Submit(submitInfo);
 
         WilloRHI::PresentInfo presentInfo = {
-            .waitSemaphores = { renderSemaphores.at(swapchain.GetCurrentImageIndex()) },
+            .waitSemaphores = { renderingResources.frames.at(renderingResources.frameNum % FRAME_OVERLAP).renderSemaphore },
             .swapchain = swapchain
         };
 
@@ -125,6 +225,9 @@ int main()
 
     device.WaitIdle();
     graphicsQueue.CollectGarbage();
+
+    device.DestroyImageView(renderingImageView);
+    device.DestroyImage(renderingImage);
 
     glfwDestroyWindow(window);
     glfwTerminate();

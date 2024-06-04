@@ -57,12 +57,12 @@ namespace WilloRHI
     template <typename Resource_T>
     struct ResourceMap {
         Resource_T* resources = nullptr;
-        moodycamel::ConcurrentQueue<uint64_t> freeSlotQueue;
-        uint64_t maxNumResources = 0;
+        moodycamel::ConcurrentQueue<uint32_t> freeSlotQueue;
+        uint32_t maxNumResources = 0;
         std::string resourceNameHash;
 
         ResourceMap() {}
-        ResourceMap(uint64_t maxCount) {
+        ResourceMap(uint32_t maxCount) {
 
             // TODO: investigate getting rid of moodycamel
             /*
@@ -74,28 +74,28 @@ namespace WilloRHI
 
             resources = new Resource_T[maxCount];
             
-            freeSlotQueue = moodycamel::ConcurrentQueue<uint64_t>(maxCount);
+            freeSlotQueue = moodycamel::ConcurrentQueue<uint32_t>(maxCount);
             maxNumResources = maxCount;
 
-            std::vector<uint64_t> vec;
-            for (uint64_t i = 0; i < maxNumResources; i++)
+            std::vector<uint32_t> vec;
+            for (uint32_t i = 0; i < maxNumResources; i++)
                 vec.push_back(i);
             freeSlotQueue.enqueue_bulk(vec.begin(), maxNumResources);
 
             resourceNameHash = typeid(Resource_T).name();
         }
 
-        uint64_t Allocate() {
-            uint64_t newSlot = 0;
+        uint32_t Allocate() {
+            uint32_t newSlot = 0;
             freeSlotQueue.try_dequeue(newSlot);
             return newSlot;
         }
 
-        Resource_T& At(uint64_t index) const {
+        Resource_T& At(uint32_t index) const {
             return resources[index];
         }
 
-        void Free(uint64_t index) {
+        void Free(uint32_t index) {
             freeSlotQueue.enqueue(index);
         }
     };
@@ -124,4 +124,10 @@ namespace WilloRHI
     bool IsDepthFormat(Format format);
     bool IsStencilFormat(Format format);
     VkImageAspectFlags AspectFromFormat(Format format);
+
+    struct GlobalDescriptors {
+        VkDescriptorPool pool;
+        VkDescriptorSetLayout setLayout;
+        VkDescriptorSet descriptorSet;
+    };
 }

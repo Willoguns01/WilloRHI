@@ -10,3 +10,4 @@
 #include "WilloRHI/Swapchain.hpp"
 #include "WilloRHI/CommandList.hpp"
 #include "WilloRHI/Queue.hpp"
+#include "WilloRHI/Pipeline.hpp"

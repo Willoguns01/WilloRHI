@@ -19,4 +19,16 @@ namespace WilloRHI
     
     class Queue;
     struct ImplQueue;
+
+    class ShaderModule;
+    struct ImplShaderModule;
+
+    class ComputePipeline;
+    struct ImplComputePipeline;
+
+    class GraphicsPipeline;
+    struct ImplGraphicsPipeline;
+
+    class PipelineManager;
+    struct ImplPipelineManager;
 }

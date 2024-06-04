@@ -64,10 +64,13 @@ namespace WilloRHI
 
         for (uint32_t i = 0; i < createInfo.framesInFlight; i++)
         {
-            uint64_t imageId = resources->images.Allocate();
+            uint32_t imageId = resources->images.Allocate();
 
             ImageResource resource = {
                 .image = vkImages.at(i),
+                .createInfo = {
+                    .size = {createInfo.width, createInfo.height, 1}
+                },
                 .aspect = VK_IMAGE_ASPECT_COLOR_BIT
             };
 
@@ -211,10 +214,13 @@ namespace WilloRHI
         for (int32_t i = 0; i < _framesInFlight; i++)
         {
             resources->images.Free(_images.at(i));
-            uint64_t imageId = resources->images.Allocate();
+            uint32_t imageId = resources->images.Allocate();
 
             ImageResource resource = {
                 .image = vkImages.at(i),
+                .createInfo = {
+                    .size = {width, height, 1}
+                },
                 .aspect = VK_IMAGE_ASPECT_COLOR_BIT
             };
 

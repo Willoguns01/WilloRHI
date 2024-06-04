@@ -38,8 +38,12 @@ namespace WilloRHI
         };
 
         VkPhysicalDeviceVulkan12Features features12 = {
+            .drawIndirectCount = true,
             .descriptorIndexing = true,
             .descriptorBindingSampledImageUpdateAfterBind = true,
+            .descriptorBindingStorageImageUpdateAfterBind = true,
+            .descriptorBindingStorageBufferUpdateAfterBind = true,
+            .runtimeDescriptorArray = true,
             .timelineSemaphore = true,
             .bufferDeviceAddress = true,
         };
@@ -298,7 +302,7 @@ namespace WilloRHI
     {
         BufferResource newBuffer = {};
 
-        uint64_t bufferSlot = _resources.buffers.Allocate();
+        uint32_t bufferSlot = _resources.buffers.Allocate();
 
         // create and allocate for buffer
 
@@ -383,7 +387,7 @@ namespace WilloRHI
     {
         ImageResource newImage = {};
 
-        uint64_t imageSlot = _resources.images.Allocate();
+        uint32_t imageSlot = _resources.images.Allocate();
 
         VkImageType imageTypeDims[3] = {VK_IMAGE_TYPE_1D, VK_IMAGE_TYPE_2D, VK_IMAGE_TYPE_3D};
         VkImageType imageType = imageTypeDims[createInfo.dimensions - 1];
@@ -443,7 +447,7 @@ namespace WilloRHI
     ImageViewId ImplDevice::CreateImageView(const ImageViewCreateInfo& createInfo)
     {
         ImageResource& imageRsrc = _resources.images.At(createInfo.image);
-        uint64_t viewSlot = _resources.imageViews.Allocate();
+        uint32_t viewSlot = _resources.imageViews.Allocate();
         ImageViewResource newImageView = {};
         newImageView.createInfo = createInfo;
 
@@ -473,50 +477,54 @@ namespace WilloRHI
 
         _resources.imageViews.At(viewSlot) = newImageView;
 
-        uint32_t numWrites = 0;
-        VkWriteDescriptorSet descWrites[2] = {};
+        std::vector<VkWriteDescriptorSet> descWrites;
+        descWrites.reserve(2);
 
         if (imageRsrc.createInfo.usageFlags & ImageUsageFlag::STORAGE) {
+            LogMessage("Create storage view", false);
             VkDescriptorImageInfo storageImageDescriptor = {
                 .sampler = VK_NULL_HANDLE,
                 .imageView = newImageView.imageView,
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL
             };
 
-            descWrites[numWrites++] = {
+            descWrites.push_back({
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = nullptr,
                 .dstSet = _globalDescriptors.descriptorSet,
                 .dstBinding = WilloRHI_STORAGE_IMAGE_BINDING,
                 .dstArrayElement = (uint32_t)viewSlot,
                 .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = &storageImageDescriptor,
                 .pBufferInfo = nullptr,
                 .pTexelBufferView = nullptr
-            };
+            });
         }
 
         if (imageRsrc.createInfo.usageFlags & ImageUsageFlag::SAMPLED) {
+            LogMessage("Create sampling view", false);
             VkDescriptorImageInfo sampledImageDescriptor = {
                 .sampler = VK_NULL_HANDLE,
                 .imageView = newImageView.imageView,
                 .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL
             };
 
-            descWrites[numWrites++] = {
+            descWrites.push_back({
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = nullptr,
                 .dstSet = _globalDescriptors.descriptorSet,
                 .dstBinding = WilloRHI_SAMPLED_IMAGE_BINDING,
                 .dstArrayElement = (uint32_t)viewSlot,
                 .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .pImageInfo = &sampledImageDescriptor,
                 .pBufferInfo = nullptr,
                 .pTexelBufferView = nullptr
-            };
+            });
         }
 
-        vkUpdateDescriptorSets(_vkDevice, numWrites, descWrites, 0, nullptr);
+        vkUpdateDescriptorSets(_vkDevice, (uint32_t)descWrites.size(), descWrites.data(), 0, nullptr);
 
         return viewSlot;
     }
@@ -526,7 +534,7 @@ namespace WilloRHI
     SamplerId ImplDevice::CreateSampler(const SamplerCreateInfo& createInfo)
     {
         SamplerResource newSampler = {};
-        uint64_t samplerSlot = _resources.samplers.Allocate();
+        uint32_t samplerSlot = _resources.samplers.Allocate();
         newSampler.createInfo = createInfo;
 
         VkSamplerReductionModeCreateInfo vkReductionMode = {
@@ -573,6 +581,7 @@ namespace WilloRHI
             .dstBinding = WilloRHI_SAMPLER_BINDING,
             .dstArrayElement = (uint32_t)samplerSlot,
             .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
             .pImageInfo = &samplerDescriptor,
             .pBufferInfo = nullptr,
             .pTexelBufferView = nullptr
@@ -699,9 +708,20 @@ namespace WilloRHI
         return static_cast<void*>(_resources.samplers.At(handle).sampler);
     }
 
+    void* Device::GetNativeSetLayout() const {return impl->GetNativeSetLayout();}
+    void* ImplDevice::GetNativeSetLayout() const {
+        return static_cast<void*>(_globalDescriptors.setLayout);
+    }
+
     void* Device::GetDeviceResources() { return impl->GetDeviceResources(); }
     void* ImplDevice::GetDeviceResources() {
         return static_cast<void*>(&_resources);
+    }
+
+    void* Device::GetResourceDescriptors() {
+        return impl->GetResourceDescriptors(); }
+    void* ImplDevice::GetResourceDescriptors() {
+        return static_cast<void*>(&_globalDescriptors);
     }
 
     void* Device::GetAllocator() const { return impl->GetAllocator(); }
