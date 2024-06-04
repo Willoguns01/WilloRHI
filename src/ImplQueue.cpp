@@ -124,6 +124,7 @@ namespace WilloRHI
 
         for (int i = 0; i < commandListCount; i++) {
             CommandList cmdList = submitInfo.commandLists.at(i);
+            cmdList.FlushBarriers();
             VkCommandBuffer vkBuf = static_cast<VkCommandBuffer>(cmdList.GetNativeHandle());
             cmdBuffers.push_back(vkBuf);
         }

@@ -46,28 +46,28 @@ int main()
     // just roll with the defaults
     WilloRHI::ResourceCountInfo countInfo = {};
 
-    WilloRHI::DeviceCreateInfo deviceInfo = {
-        .applicationName = "01_Initialization",
-        .validationLayers = true,
-        .logCallback = &OutputMessage,
-        .logInfo = true,
-        .resourceCounts = countInfo
-    };
-
     //WilloRHI::DeviceCreateInfo deviceInfo = {
     //    .applicationName = "01_Initialization",
-    //    .validationLayers = false,
-    //    .logCallback = nullptr,
-    //    .logInfo = false,
+    //    .validationLayers = true,
+    //    .logCallback = &OutputMessage,
+    //    .logInfo = true,
     //    .resourceCounts = countInfo
     //};
+
+    WilloRHI::DeviceCreateInfo deviceInfo = {
+        .applicationName = "01_Initialization",
+        .validationLayers = false,
+        .logCallback = nullptr,
+        .logInfo = false,
+        .resourceCounts = countInfo
+    };
 
     WilloRHI::Device device = WilloRHI::Device::CreateDevice(deviceInfo);
 
     WilloRHI::SwapchainCreateInfo swapchainInfo = {
         .windowHandle = hwnd,
         .format = WilloRHI::Format::B8G8R8A8_UNORM,
-        .presentMode = WilloRHI::PresentMode::FIFO,
+        .presentMode = WilloRHI::PresentMode::IMMEDIATE,
         .width = 1280,
         .height = 720,
         .framesInFlight = FRAME_OVERLAP
@@ -106,7 +106,7 @@ int main()
 
     // compute shader
 
-    std::ifstream file("shaders/test_compute.spv", std::ios::ate | std::ios::binary);
+    std::ifstream file("resources/shaders/test_compute.spv", std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
         std::cout << "Failed to open shader file\n";
     }
@@ -166,7 +166,7 @@ int main()
             .dstLayout = WilloRHI::ImageLayout::GENERAL,
             .subresourceRange = {}
         };
-        cmdList.TransitionImageLayout(renderingImage, barrierInfo);
+        cmdList.ImageMemoryBarrier(renderingImage, barrierInfo);
 
         ComputePushConstants testConstants = {
             .targetTextureIndex = renderingImageView
@@ -174,26 +174,22 @@ int main()
 
         cmdList.BindComputePipeline(testComputePipeline);
         cmdList.PushConstants(0, sizeof(ComputePushConstants), (void*)&testConstants);
-        cmdList.Dispatch(std::ceil(1280 / 16), std::ceil(720 / 16), 1);
+        cmdList.Dispatch((uint32_t)std::ceil(renderImageInfo.size.width / 16), (uint32_t)std::ceil(renderImageInfo.size.height / 16), 1);
 
         barrierInfo = {
             .dstStage = WilloRHI::PipelineStageFlag::TRANSFER,
             .dstAccess = WilloRHI::MemoryAccessFlag::READ,
             .dstLayout = WilloRHI::ImageLayout::TRANSFER_SRC
         };
-        cmdList.TransitionImageLayout(renderingImage, barrierInfo);
+        cmdList.ImageMemoryBarrier(renderingImage, barrierInfo);
 
         barrierInfo = {
             .dstStage = WilloRHI::PipelineStageFlag::TRANSFER,
             .dstAccess = WilloRHI::MemoryAccessFlag::WRITE,
             .dstLayout = WilloRHI::ImageLayout::TRANSFER_DST
         };
-        cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
+        cmdList.ImageMemoryBarrier(swapchainImage, barrierInfo);
 
-        //WilloRHI::ImageCopyRegion copyRegion = {
-        //    .extent = {1280, 720, 1}
-        //};
-        //cmdList.CopyImage(renderingImage, swapchainImage, 1, &copyRegion);
         cmdList.BlitImage(renderingImage, swapchainImage, WilloRHI::Filter::LINEAR);
 
         barrierInfo = {
@@ -201,7 +197,7 @@ int main()
             .dstAccess = WilloRHI::MemoryAccessFlag::READ,
             .dstLayout = WilloRHI::ImageLayout::PRESENT_SRC
         };
-        cmdList.TransitionImageLayout(swapchainImage, barrierInfo);
+        cmdList.ImageMemoryBarrier(swapchainImage, barrierInfo);
 
         cmdList.End();
 

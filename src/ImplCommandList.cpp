@@ -31,13 +31,29 @@ namespace WilloRHI
     void CommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
         impl->PushConstants(offset, size, data); }
     void ImplCommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
+        FlushBarriers();
         vkCmdPushConstants(_vkCommandBuffer, _currentPipelineLayout, VK_SHADER_STAGE_ALL, offset, size, data);
     }
 
-    void CommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo) {
-        impl->TransitionImageLayout(image, barrierInfo); }
-    // TODO: barriers should be piled together and flushed all at once when necessary
-    void ImplCommandList::TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo)
+    void CommandList::GlobalMemoryBarrier(const GlobalMemoryBarrierInfo& barrierInfo) {
+        impl->GlobalMemoryBarrier(barrierInfo); }
+    void ImplCommandList::GlobalMemoryBarrier(const GlobalMemoryBarrierInfo& barrierInfo)
+    {
+        VkMemoryBarrier2 barrier = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .pNext = nullptr,
+            .srcStageMask = static_cast<VkPipelineStageFlags2>(barrierInfo.srcStage),
+            .srcAccessMask = static_cast<VkAccessFlags2>(barrierInfo.srcAccess),
+            .dstStageMask = static_cast<VkPipelineStageFlags2>(barrierInfo.dstStage),
+            .dstAccessMask = static_cast<VkAccessFlags2>(barrierInfo.dstAccess)
+        };
+
+        _globalBarriers.push_back(barrier);
+    }
+
+    void CommandList::ImageMemoryBarrier(ImageId image, const ImageMemoryBarrierInfo& barrierInfo) {
+        impl->ImageMemoryBarrier(image, barrierInfo); }
+    void ImplCommandList::ImageMemoryBarrier(ImageId image, const ImageMemoryBarrierInfo& barrierInfo)
     {
         VkImageSubresourceRange resourceRange = {
             .aspectMask = _resources->images.At(image).aspect,
@@ -53,33 +69,77 @@ namespace WilloRHI
         VkImageMemoryBarrier2 imageBarrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .pNext = nullptr,
-            .srcStageMask = static_cast<VkPipelineStageFlagBits2>(imageResource.currentPipelineStage),
-            .srcAccessMask = static_cast<VkAccessFlagBits2>(imageResource.currentAccessFlags),
-            .dstStageMask = static_cast<VkPipelineStageFlagBits2>(barrierInfo.dstStage),
-            .dstAccessMask = static_cast<VkAccessFlagBits2>(barrierInfo.dstAccess),
+            .srcStageMask = static_cast<VkPipelineStageFlags2>(imageResource.currentPipelineStage),
+            .srcAccessMask = static_cast<VkAccessFlags2>(imageResource.currentAccessFlags),
+            .dstStageMask = static_cast<VkPipelineStageFlags2>(barrierInfo.dstStage),
+            .dstAccessMask = static_cast<VkAccessFlags2>(barrierInfo.dstAccess),
             .oldLayout = static_cast<VkImageLayout>(imageResource.currentLayout),
             .newLayout = static_cast<VkImageLayout>(barrierInfo.dstLayout),
             .image = vkImage,
             .subresourceRange = resourceRange
         };
 
-        VkDependencyInfo depInfo = {
-            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        imageResource.currentLayout = static_cast<VkImageLayout>(barrierInfo.dstLayout);
+        imageResource.currentAccessFlags = static_cast<VkAccessFlags2>(barrierInfo.dstAccess);
+        imageResource.currentPipelineStage = static_cast<VkPipelineStageFlags2>(barrierInfo.dstStage);
+    
+        _imageBarriers.push_back(imageBarrier);
+    }
+
+    void CommandList::BufferMemoryBarrier(BufferId buffer, const BufferMemoryBarrierInfo& barrierInfo) {
+        impl->BufferMemoryBarrier(buffer, barrierInfo); }
+    void ImplCommandList::BufferMemoryBarrier(BufferId buffer, const BufferMemoryBarrierInfo& barrierInfo)
+    {
+        BufferResource& bufferResource = _resources->buffers.At(buffer);
+
+        VkBufferMemoryBarrier2 bufferBarrier = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext = nullptr,
-            .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers = &imageBarrier,
+            .srcStageMask = bufferResource.currentPipelineStage,
+            .srcAccessMask = bufferResource.currentAccessFlags,
+            .dstStageMask = static_cast<VkPipelineStageFlags2>(barrierInfo.dstStage),
+            .dstAccessMask = static_cast<VkAccessFlags2>(barrierInfo.dstAccess),
+            .buffer = bufferResource.buffer,
+            .offset = 0,
+            .size = bufferResource.createInfo.size
         };
 
-        vkCmdPipelineBarrier2(_vkCommandBuffer, &depInfo);
+        bufferResource.currentPipelineStage = static_cast<VkPipelineStageFlags2>(barrierInfo.dstStage);
+        bufferResource.currentAccessFlags = static_cast<VkAccessFlags2>(barrierInfo.dstAccess);
 
-        imageResource.currentLayout = static_cast<VkImageLayout>(barrierInfo.dstLayout);
-        imageResource.currentAccessFlags = static_cast<VkAccessFlagBits2>(barrierInfo.dstAccess);
-        imageResource.currentPipelineStage = static_cast<VkPipelineStageFlagBits2>(barrierInfo.dstStage);
+        _bufferBarriers.push_back(bufferBarrier);
+    }
+
+    void CommandList::FlushBarriers() { impl->FlushBarriers(); }
+    void ImplCommandList::FlushBarriers()
+    {
+        if (_globalBarriers.size() == 0 && _bufferBarriers.size() == 0 && _imageBarriers.size() == 0) {
+            return;
+        }
+
+        VkDependencyInfo dependency = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext = nullptr,
+            .dependencyFlags = 0,
+            .memoryBarrierCount = (uint32_t)_globalBarriers.size(),
+            .pMemoryBarriers = _globalBarriers.data(),
+            .bufferMemoryBarrierCount = (uint32_t)_bufferBarriers.size(),
+            .pBufferMemoryBarriers = _bufferBarriers.data(),
+            .imageMemoryBarrierCount = (uint32_t)_imageBarriers.size(),
+            .pImageMemoryBarriers = _imageBarriers.data()
+        };
+
+        vkCmdPipelineBarrier2(_vkCommandBuffer, &dependency);
+
+        _globalBarriers.clear();
+        _bufferBarriers.clear();
+        _imageBarriers.clear();
     }
 
     void CommandList::BindComputePipeline(ComputePipeline pipeline) {
         impl->BindComputePipeline(pipeline); }
     void ImplCommandList::BindComputePipeline(ComputePipeline pipeline) {
+        FlushBarriers();
         _currentPipeline = VK_PIPELINE_BIND_POINT_COMPUTE;
         _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
         vkCmdBindDescriptorSets(
@@ -96,6 +156,7 @@ namespace WilloRHI
     void CommandList::BindGraphicsPipeline(GraphicsPipeline pipeline) {
         impl->BindGraphicsPipeline(pipeline); }
     void ImplCommandList::BindGraphicsPipeline(GraphicsPipeline pipeline) {
+        FlushBarriers();
         _currentPipeline = VK_PIPELINE_BIND_POINT_GRAPHICS;
         _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
         vkCmdBindDescriptorSets(
@@ -120,6 +181,7 @@ namespace WilloRHI
         impl->ClearImage(image, clearColour, subresourceRange); }
     void ImplCommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange)
     {
+        FlushBarriers();
         VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
 
         VkImageSubresourceRange resourceRange = {
@@ -138,6 +200,7 @@ namespace WilloRHI
         impl->CopyImage(srcImage, dstImage, numRegions, regions); }
     void ImplCommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) 
     {
+        FlushBarriers();
         ImageResource& srcResource = _resources->images.At(srcImage);
         ImageResource& dstResource = _resources->images.At(dstImage);
 
@@ -176,6 +239,7 @@ namespace WilloRHI
         impl->BlitImage(srcImage, dstImage, filter); }
     void ImplCommandList::BlitImage(ImageId srcImage, ImageId dstImage, Filter filter)
     {
+        FlushBarriers();
         ImageResource& srcResource = _resources->images.At(srcImage);
         ImageResource& dstResource = _resources->images.At(dstImage);
 
@@ -221,6 +285,7 @@ namespace WilloRHI
         impl->CopyBufferToImage(srcBuffer, dstImage, numRegions, regions); }
     void ImplCommandList::CopyBufferToImage(BufferId srcBuffer, ImageId dstImage, uint32_t numRegions, BufferImageCopyRegion* regions) 
     {
+        FlushBarriers();
         BufferResource& srcResource = _resources->buffers.At(srcBuffer);
         ImageResource& dstResource = _resources->images.At(dstImage);
 
@@ -252,6 +317,7 @@ namespace WilloRHI
         impl->CopyBuffer(srcBuffer, dstBuffer, numRegions, regions); }
     void ImplCommandList::CopyBuffer(BufferId srcBuffer, BufferId dstBuffer, uint32_t numRegions, BufferCopyRegion* regions)
     {
+        FlushBarriers();
         BufferResource& srcResource = _resources->buffers.At(srcBuffer);
         BufferResource& dstResource = _resources->buffers.At(dstBuffer);
 

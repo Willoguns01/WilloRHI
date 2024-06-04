@@ -9,12 +9,26 @@
 
 namespace WilloRHI
 {
+    struct GlobalMemoryBarrierInfo
+    {
+        PipelineStageFlags srcStage = PipelineStageFlag::NONE;
+        PipelineStageFlags dstStage = PipelineStageFlag::NONE;
+        MemoryAccessFlags srcAccess = MemoryAccessFlag::NONE;
+        MemoryAccessFlags dstAccess = MemoryAccessFlag::NONE;
+    };
+
     struct ImageMemoryBarrierInfo
     {
         PipelineStageFlags dstStage = PipelineStageFlag::NONE;
         MemoryAccessFlags dstAccess = MemoryAccessFlag::NONE;
         ImageLayout dstLayout = ImageLayout::UNDEFINED;
         ImageSubresourceRange subresourceRange = {};
+    };
+
+    struct BufferMemoryBarrierInfo
+    {
+        PipelineStageFlags dstStage = PipelineStageFlag::NONE;
+        MemoryAccessFlags dstAccess = MemoryAccessFlag::NONE;
     };
 
     struct ImageCopyRegion
@@ -54,7 +68,11 @@ namespace WilloRHI
         void PushConstants(uint32_t offset, uint32_t size, void* data);
 
         // barriers
-        void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
+        void GlobalMemoryBarrier(const GlobalMemoryBarrierInfo& barrierInfo);
+        void ImageMemoryBarrier(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
+        void BufferMemoryBarrier(BufferId buffer, const BufferMemoryBarrierInfo& barrierInfo);
+
+        void FlushBarriers();
 
         // pipelines
         void BindComputePipeline(ComputePipeline pipeline);

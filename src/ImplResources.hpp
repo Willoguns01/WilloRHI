@@ -22,6 +22,9 @@ namespace WilloRHI
         VkBuffer buffer = VK_NULL_HANDLE;
         VkDeviceAddress deviceAddress = 0;
 
+        VkPipelineStageFlags2 currentPipelineStage = VK_PIPELINE_STAGE_2_NONE;
+        VkAccessFlags2 currentAccessFlags = VK_ACCESS_2_NONE;
+
         void* mappedAddress = nullptr;
         bool isMapped = false;
 

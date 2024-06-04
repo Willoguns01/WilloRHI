@@ -23,6 +23,10 @@ namespace WilloRHI
         VkPipelineBindPoint _currentPipeline = {};
         VkPipelineLayout _currentPipelineLayout = VK_NULL_HANDLE;
 
+        std::vector<VkMemoryBarrier2> _globalBarriers;
+        std::vector<VkBufferMemoryBarrier2> _bufferBarriers;
+        std::vector<VkImageMemoryBarrier2> _imageBarriers;
+
         void Init();
 
         void Begin();
@@ -31,8 +35,12 @@ namespace WilloRHI
         void PushConstants(uint32_t offset, uint32_t size, void* data);
 
         // barriers
-        void TransitionImageLayout(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
-    
+        void GlobalMemoryBarrier(const GlobalMemoryBarrierInfo& barrierInfo);
+        void ImageMemoryBarrier(ImageId image, const ImageMemoryBarrierInfo& barrierInfo);
+        void BufferMemoryBarrier(BufferId buffer, const BufferMemoryBarrierInfo& barrierInfo);
+
+        void FlushBarriers();
+
         // pipelines
         void BindComputePipeline(ComputePipeline pipeline);
         void BindGraphicsPipeline(GraphicsPipeline pipeline);
