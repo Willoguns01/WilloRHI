@@ -38,7 +38,7 @@ int main()
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Test Window", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "01_Initialization", nullptr, nullptr);
 
     HWND hwnd = glfwGetWin32Window(window);
     glfwSwapInterval(1);
@@ -149,6 +149,22 @@ int main()
             swapchainInfo.width = windowWidth;
             swapchainInfo.height = windowHeight;
             swapchain.Resize(windowWidth, windowHeight, swapchainInfo.presentMode);
+
+            // swapchain.Resize does an implicit device flush, so we are safe to delete and recreate the rendering image as well
+
+            device.DestroyImage(renderingImage);
+            device.DestroyImageView(renderingImageView);
+
+            renderImageInfo.size = {
+                .width = (uint32_t)windowWidth,
+                .height = (uint32_t)windowHeight,
+                .depth = 1
+            };
+            renderingImage = device.CreateImage(renderImageInfo);
+            
+            renderImageViewInfo.image = renderingImage;
+            renderingImageView = device.CreateImageView(renderImageViewInfo);
+
             continue;
         }
 
