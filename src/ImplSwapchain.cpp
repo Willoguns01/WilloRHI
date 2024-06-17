@@ -160,7 +160,7 @@ namespace WilloRHI
             &_currentImageIndex
         );
 
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
             _needResize = true;
             device.LogMessage("Swapchain needs resize", false);
         }
@@ -227,6 +227,8 @@ namespace WilloRHI
             resources->images.At(imageId) = resource;
             _images.at(i) = ImageId{imageId};
         }
+
+        _needResize = false;
 
         device.LogMessage("Resized swapchain", false);
     }

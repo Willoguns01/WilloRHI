@@ -41,6 +41,7 @@ namespace WilloRHI
         VkPipeline graphicsPipeline = VK_NULL_HANDLE;
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
         GraphicsPipelineInfo createInfo = {};
+        VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_FLAG_BITS_MAX_ENUM;
 
         Device device;
 
@@ -49,6 +50,7 @@ namespace WilloRHI
         void* GetPipelineHandle() const;
         void* GetPipelineLayout() const;
         GraphicsPipelineInfo GetInfo() const;
+        uint64_t GetStageFlags() const;
     };
 
     struct ImplPipelineManager

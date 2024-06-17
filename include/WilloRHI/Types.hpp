@@ -45,6 +45,15 @@ namespace WilloRHI
         Extent2D extent = {};
     };
 
+    struct Viewport {
+        float x = 0.f;
+        float y = 0.f;
+        float width = 1.f;
+        float height = 1.f;
+        float minDepth = 0.f;
+        float maxDepth = 1.f;
+    };
+
     struct ImageSubresourceRange 
     {
         uint32_t baseLevel = 0;
@@ -438,6 +447,63 @@ namespace WilloRHI
         ALWAYS = 7,
     };
 
+    enum class LogicOp : uint32_t {
+        CLEAR = 0,
+        AND = 1,
+        AND_REVERSE = 2,
+        COPY = 3,
+        AND_INVERTED = 4,
+        NO_OP = 5,
+        XOR = 6,
+        OR = 7,
+        NOR = 8,
+        EQUIVALENT = 9,
+        INVERT = 10,
+        OR_REVERSE = 11,
+        COPY_INVERTED = 12,
+        OR_INVERTED = 13,
+        NAND = 14,
+        SET = 15,
+    };
+
+    enum class BlendOp : uint32_t {
+        ADD = 0,
+        SUBTRACT = 1,
+        REVERSE_SUBTRACT = 2,
+        MIN = 3,
+        MAX = 4,
+    };
+
+    enum class BlendFactor : uint32_t {
+        ZERO = 0,
+        ONE = 1,
+        SRC_COLOR = 2,
+        ONE_MINUS_SRC_COLOR = 3,
+        DST_COLOR = 4,
+        ONE_MINUS_DST_COLOR = 5,
+        SRC_ALPHA = 6,
+        ONE_MINUS_SRC_ALPHA = 7,
+        DST_ALPHA = 8,
+        ONE_MINUS_DST_ALPHA = 9,
+        CONSTANT_COLOR = 10,
+        ONE_MINUS_CONSTANT_COLOR = 11,
+        CONSTANT_ALPHA = 12,
+        ONE_MINUS_CONSTANT_ALPHA = 13,
+        SRC_ALPHA_SATURATE = 14,
+        SRC1_COLOR = 15,
+        ONE_MINUS_SRC1_COLOR = 16,
+        SRC1_ALPHA = 17,
+        ONE_MINUS_SRC1_ALPHA = 18,
+    };
+
+    enum class ColourComponentFlag : uint32_t {
+        COMP_R = 0x00000001,
+        COMP_G = 0x00000002,
+        COMP_B = 0x00000004,
+        COMP_A = 0x00000008,
+    };
+    WilloRHI_DECLARE_FLAG_TYPE(ColourComponentFlags, ColourComponentFlag, uint32_t)
+
     enum class BorderColour : uint32_t {
         FLOAT_TRANSPARENT_BLACK = 0,
         INT_TRANSPARENT_BLACK = 1,
@@ -448,12 +514,79 @@ namespace WilloRHI
     };
 
     enum class ShaderStageFlag : uint32_t {
-        VERTEX_BIT = 0x00000001,
-        TESSELLATION_CONTROL_BIT = 0x00000002,
-        TESSELLATION_EVALUATION_BIT = 0x00000004,
-        GEOMETRY_BIT = 0x00000008,
-        FRAGMENT_BIT = 0x00000010,
-        COMPUTE_BIT = 0x00000020,
+        VERTEX = 0x00000001,
+        TESSELLATION_CONTROL = 0x00000002,
+        TESSELLATION_EVALUATION = 0x00000004,
+        GEOMETRY = 0x00000008,
+        FRAGMENT = 0x00000010,
+        COMPUTE = 0x00000020,
     };
     WilloRHI_DECLARE_FLAG_TYPE(ShaderStageFlags, ShaderStageFlag, uint32_t)
+
+    enum class PrimitiveTopology : uint32_t {
+        POINT_LIST = 0,
+        LINE_LIST = 1,
+        LINE_STRIP = 2,
+        TRIANGLE_LIST = 3,
+        TRIANGLE_STRIP = 4,
+        TRIANGLE_FAN = 5,
+        LINE_LIST_WITH_ADJACENCY = 6,
+        LINE_STRIP_WITH_ADJACENCY = 7,
+        TRIANGLE_LIST_WITH_ADJACENCY = 8,
+        TRIANGLE_STRIP_WITH_ADJACENCY = 9,
+        PATCH_LIST = 10,
+    };
+
+    enum class VertexInputRate : uint32_t {
+        VERTEX = 0,
+        INSTANCE = 1
+    };
+
+    enum class TessellationDomainOrigin : uint32_t {
+        UPPER_LEFT = 0,
+        LOWER_LEFT = 1
+    };
+
+    enum class PolygonMode : uint32_t {
+        FILL = 0,
+        LINE = 1,
+        POINT = 2
+    };
+
+    enum class CullMode : uint32_t {
+        NONE = 0,
+        FRONT = 1,
+        BACK = 2,
+        FRONT_AND_BACK = 3
+    };
+
+    enum class FrontFace : uint32_t {
+        COUNTER_CLOCKWISE = 0,
+        CLOCKWISE = 1
+    };
+
+    enum class ConservativeRasterMode : uint32_t {
+        NONE = 0,
+        OVER_ESTIMATE = 1,
+        UNDER_ESTIMATE = 2
+    };
+
+    enum class IndexType : uint32_t {
+        UINT8 = 1000265000,
+        UINT16 = 0,
+        UINT32 = 1
+    };
+
+    enum class LoadOp : uint32_t {
+        LOAD = 0,
+        CLEAR = 1,
+        DONT_CARE = 2,
+        NONE = 1000400000
+    };
+
+    enum class StoreOp : uint32_t {
+        STORE = 0,
+        DONT_CARE = 1,
+        NONE = 1000301000
+    };
 }

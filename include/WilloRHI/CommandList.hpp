@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <memory>
+#include <optional>
 
 namespace WilloRHI
 {
@@ -57,6 +58,39 @@ namespace WilloRHI
         uint64_t size = 0;
     };
 
+    struct DrawIndirectCommand
+    {
+        uint32_t vertexCount;
+        uint32_t instanceCount;
+        uint32_t firstVertex;
+        uint32_t firstInstance;
+    };
+
+    struct DrawIndexedIndirectCommand
+    {
+        uint32_t indexCount;
+        uint32_t instanceCount;
+        uint32_t firstIndex;
+        int32_t vertexOffset;
+        uint32_t firstInstance;
+    };
+
+    struct RenderPassAttachmentInfo
+    {
+        ImageViewId imageView = 0;
+        ImageLayout imageLayout = ImageLayout::UNDEFINED;
+        LoadOp loadOp = LoadOp::LOAD;
+        StoreOp storeOp = StoreOp::STORE;
+        ClearColour clearColour = {};
+    };
+
+    struct RenderPassBeginInfo
+    {
+        std::vector<RenderPassAttachmentInfo> colourAttachments;
+        std::optional<RenderPassAttachmentInfo> depthAttachment = {};
+        Rect2D renderingArea = {};
+    };
+
     class CommandList
     {
     public:
@@ -64,6 +98,9 @@ namespace WilloRHI
 
         void Begin();
         void End();
+
+        void BeginRendering(const RenderPassBeginInfo& beginInfo);
+        void EndRendering();
 
         void PushConstants(uint32_t offset, uint32_t size, void* data);
 
@@ -78,11 +115,25 @@ namespace WilloRHI
         void BindComputePipeline(ComputePipeline pipeline);
         void BindGraphicsPipeline(GraphicsPipeline pipeline);
 
+        void BindVertexBuffer(BufferId buffer, uint32_t binding);
+        void BindIndexBuffer(BufferId buffer, uint64_t bufferOffset, IndexType indexType);
+
+        void SetViewport(Viewport viewport);
+        void SetScissor(std::vector<Rect2D> scissor);
+
         // compute dispatch
         void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
         // drawing commands
-        void ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange);
+        void ClearImage(ImageId image, ClearColour clearColour, const ImageSubresourceRange& subresourceRange);
+
+        void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+        void DrawIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount);
+        void DrawIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount);
+
+        void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, uint32_t vertexOffset, uint32_t firstInstance);
+        void DrawIndexedIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount);
+        void DrawIndexedIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount);
 
         // copy commands
         void CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions);

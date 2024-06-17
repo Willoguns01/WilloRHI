@@ -24,15 +24,95 @@ namespace WilloRHI
     void CommandList::End() { impl->End(); }
     void ImplCommandList::End()
     {
+        FlushBarriers();
         _device.UnlockResources_Shared();
         vkEndCommandBuffer(_vkCommandBuffer);
+    }
+
+    void CommandList::BeginRendering(const RenderPassBeginInfo& beginInfo) {
+        impl->BeginRendering(beginInfo); }
+    void ImplCommandList::BeginRendering(const RenderPassBeginInfo& beginInfo)
+    {
+        FlushBarriers();
+
+        std::vector<VkRenderingAttachmentInfo> vkColourAttachments;
+        vkColourAttachments.reserve(beginInfo.colourAttachments.size());
+        for (const auto& attachment : beginInfo.colourAttachments) {
+            vkColourAttachments.push_back({
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .pNext = nullptr,
+                .imageView = _resources->imageViews.At(attachment.imageView).imageView,
+                .imageLayout = static_cast<VkImageLayout>(attachment.imageLayout),
+                .resolveMode = VK_RESOLVE_MODE_NONE,
+                .resolveImageView = VK_NULL_HANDLE,
+                .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .loadOp = static_cast<VkAttachmentLoadOp>(attachment.loadOp),
+                .storeOp = static_cast<VkAttachmentStoreOp>(attachment.storeOp),
+                .clearValue = { .color = { attachment.clearColour.r, attachment.clearColour.g, attachment.clearColour.b, attachment.clearColour.a, } }
+            });
+        }
+
+        VkRenderingAttachmentInfo vkDepthAttachment = {};
+        bool hasDepthAttachment = false;
+        if (beginInfo.depthAttachment.has_value()) {
+            hasDepthAttachment = true;
+            const RenderPassAttachmentInfo& depthInfo = beginInfo.depthAttachment.value();
+            vkDepthAttachment = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .pNext = nullptr,
+                .imageView = _resources->imageViews.At(depthInfo.imageView).imageView,
+                .imageLayout = static_cast<VkImageLayout>(depthInfo.imageLayout),
+                .resolveMode = VK_RESOLVE_MODE_NONE,
+                .resolveImageView = VK_NULL_HANDLE,
+                .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .loadOp = static_cast<VkAttachmentLoadOp>(depthInfo.loadOp),
+                .storeOp = static_cast<VkAttachmentStoreOp>(depthInfo.storeOp),
+                .clearValue = { .depthStencil = { .depth = depthInfo.clearColour.r }}
+            };
+        }
+
+        VkRenderingInfo renderingInfo = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .renderArea = VkRect2D {
+                .offset = {.x = beginInfo.renderingArea.offset.x, .y = beginInfo.renderingArea.offset.y},
+                .extent = {.width = beginInfo.renderingArea.extent.width, .height = beginInfo.renderingArea.extent.height}
+            },
+            .layerCount = 1,
+            .viewMask = {},
+            .colorAttachmentCount = (uint32_t)beginInfo.colourAttachments.size(),
+            .pColorAttachments = vkColourAttachments.data(),
+            .pDepthAttachment = hasDepthAttachment ? &vkDepthAttachment : nullptr,
+            .pStencilAttachment = nullptr
+        };
+
+        vkCmdBeginRendering(_vkCommandBuffer, &renderingInfo);
+
+        VkViewport vkViewport = {
+            .x = (float)beginInfo.renderingArea.offset.x,
+            .y = (float)beginInfo.renderingArea.offset.y,
+            .width = (float)beginInfo.renderingArea.extent.width,
+            .height = (float)beginInfo.renderingArea.extent.height,
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
+        vkCmdSetViewport(_vkCommandBuffer, 0, 1, &vkViewport);
+
+        vkCmdSetScissor(_vkCommandBuffer, 0, 1, reinterpret_cast<const VkRect2D*>(&beginInfo.renderingArea));
+    }
+
+    void CommandList::EndRendering() { impl->EndRendering(); }
+    void ImplCommandList::EndRendering()
+    {
+        vkCmdEndRendering(_vkCommandBuffer);
     }
 
     void CommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
         impl->PushConstants(offset, size, data); }
     void ImplCommandList::PushConstants(uint32_t offset, uint32_t size, void* data) {
         FlushBarriers();
-        vkCmdPushConstants(_vkCommandBuffer, _currentPipelineLayout, VK_SHADER_STAGE_ALL, offset, size, data);
+        vkCmdPushConstants(_vkCommandBuffer, _currentPipelineLayout, _currentStageFlags, offset, size, data);
     }
 
     void CommandList::GlobalMemoryBarrier(const GlobalMemoryBarrierInfo& barrierInfo) {
@@ -142,6 +222,7 @@ namespace WilloRHI
         FlushBarriers();
         _currentPipeline = VK_PIPELINE_BIND_POINT_COMPUTE;
         _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
+        _currentStageFlags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         vkCmdBindDescriptorSets(
             _vkCommandBuffer,
             VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -159,6 +240,7 @@ namespace WilloRHI
         FlushBarriers();
         _currentPipeline = VK_PIPELINE_BIND_POINT_GRAPHICS;
         _currentPipelineLayout = static_cast<VkPipelineLayout>(pipeline.GetPipelineLayout());
+        _currentStageFlags = static_cast<VkPipelineStageFlags>(pipeline.GetStageFlags());
         vkCmdBindDescriptorSets(
             _vkCommandBuffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -170,6 +252,63 @@ namespace WilloRHI
         vkCmdBindPipeline(_vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<VkPipeline>(pipeline.GetPipelineHandle()));
     }
 
+    void CommandList::BindVertexBuffer(BufferId buffer, uint32_t binding) {
+        impl->BindVertexBuffer(buffer, binding); }
+    void ImplCommandList::BindVertexBuffer(BufferId buffer, uint32_t binding)
+    {
+        constexpr VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(_vkCommandBuffer, binding, 1, &_resources->buffers.At(buffer).buffer, &offset);
+    }
+
+    void CommandList::BindIndexBuffer(BufferId buffer, uint64_t bufferOffset, IndexType indexType) {
+        impl->BindIndexBuffer(buffer, bufferOffset, indexType); }
+    void ImplCommandList::BindIndexBuffer(BufferId buffer, uint64_t bufferOffset, IndexType indexType)
+    {
+        vkCmdBindIndexBuffer(_vkCommandBuffer, _resources->buffers.At(buffer).buffer, bufferOffset, static_cast<VkIndexType>(indexType));
+    }
+
+    void CommandList::SetViewport(Viewport viewport) {
+        impl->SetViewport(viewport); }
+    void ImplCommandList::SetViewport(Viewport viewport)
+    {
+        VkViewport vkViewport = {
+            .x = viewport.x,
+            .y = viewport.y,
+            .width = viewport.width,
+            .height = viewport.height,
+            .minDepth = viewport.minDepth,
+            .maxDepth = viewport.maxDepth
+        };
+
+        // TODO: which of these is faster?
+
+        vkCmdSetViewport(_vkCommandBuffer, 0, 1, &vkViewport);
+
+        //vkCmdSetViewport(_vkCommandBuffer, 0, 1, reinterpret_cast<VkViewport*>(&viewport));
+    }
+
+    void CommandList::SetScissor(std::vector<Rect2D> scissor) {
+        impl->SetScissor(scissor); }
+    void ImplCommandList::SetScissor(std::vector<Rect2D> scissor)
+    {
+        std::vector<VkRect2D> vkRects;
+        vkRects.reserve(scissor.size());
+        for (const auto& elem : scissor) {
+            vkRects.push_back(VkRect2D{
+                .offset = {
+                    .x = elem.offset.x,
+                    .y = elem.offset.y
+                },
+                .extent = {
+                    .width = elem.extent.width,
+                    .height = elem.extent.height
+                }
+            });
+        }
+
+        vkCmdSetScissor(_vkCommandBuffer, 0, (uint32_t)vkRects.size(), vkRects.data());
+    }
+
     void CommandList::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) {
         impl->Dispatch(groupCountX, groupCountY, groupCountZ); }
     void ImplCommandList::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
@@ -177,12 +316,12 @@ namespace WilloRHI
         vkCmdDispatch(_vkCommandBuffer, groupCountX, groupCountY, groupCountZ);
     }
 
-    void CommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange) {
+    void CommandList::ClearImage(ImageId image, ClearColour clearColour, const ImageSubresourceRange& subresourceRange) {
         impl->ClearImage(image, clearColour, subresourceRange); }
-    void ImplCommandList::ClearImage(ImageId image, const float clearColour[4], const ImageSubresourceRange& subresourceRange)
+    void ImplCommandList::ClearImage(ImageId image, ClearColour clearColour, const ImageSubresourceRange& subresourceRange)
     {
         FlushBarriers();
-        VkClearColorValue vkClear = { {clearColour[0], clearColour[1], clearColour[2], clearColour[3]} };
+        VkClearColorValue vkClear = { {clearColour.r, clearColour.g, clearColour.b, clearColour.a} };
 
         VkImageSubresourceRange resourceRange = {
             .aspectMask = _resources->images.At(image).aspect,
@@ -194,6 +333,48 @@ namespace WilloRHI
 
         VkImage vkImage = static_cast<VkImage>(_device.GetImageNativeHandle(image));
         vkCmdClearColorImage(_vkCommandBuffer, vkImage, VK_IMAGE_LAYOUT_GENERAL, &vkClear, 1, &resourceRange);
+    }
+
+    void CommandList::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+        impl->Draw(vertexCount, instanceCount, firstVertex, firstInstance); }
+    void ImplCommandList::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+    {
+        vkCmdDraw(_vkCommandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+
+    void CommandList::DrawIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount) {
+        impl->DrawIndirect(argBuffer, offset, drawCount); }
+    void ImplCommandList::DrawIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount)
+    {
+        vkCmdDrawIndirect(_vkCommandBuffer, _resources->buffers.At(argBuffer).buffer, offset, drawCount, sizeof(DrawIndirectCommand));
+    }
+
+    void CommandList::DrawIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount) {
+        impl->DrawIndirectCount(argBuffer, offset, countBuffer, countBufferOffset, maxDrawCount); }
+    void ImplCommandList::DrawIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount)
+    {
+        vkCmdDrawIndirectCount(_vkCommandBuffer, _resources->buffers.At(argBuffer).buffer, offset, _resources->buffers.At(countBuffer).buffer, countBufferOffset, maxDrawCount, sizeof(DrawIndirectCommand));
+    }
+
+    void CommandList::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, uint32_t vertexOffset, uint32_t firstInstance) {
+        impl->DrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance); }
+    void ImplCommandList::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, uint32_t vertexOffset, uint32_t firstInstance)
+    {
+        vkCmdDrawIndexed(_vkCommandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+
+    void CommandList::DrawIndexedIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount) {
+        impl->DrawIndexedIndirect(argBuffer, offset, drawCount); }
+    void ImplCommandList::DrawIndexedIndirect(BufferId argBuffer, uint64_t offset, uint32_t drawCount)
+    {
+        vkCmdDrawIndexedIndirect(_vkCommandBuffer, _resources->buffers.At(argBuffer).buffer, offset, drawCount, sizeof(DrawIndexedIndirectCommand));
+    }
+
+    void CommandList::DrawIndexedIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount) {
+        impl->DrawIndexedIndirectCount(argBuffer, offset, countBuffer, countBufferOffset, maxDrawCount); }
+    void ImplCommandList::DrawIndexedIndirectCount(BufferId argBuffer, uint64_t offset, BufferId countBuffer, uint64_t countBufferOffset, uint32_t maxDrawCount)
+    {
+        vkCmdDrawIndexedIndirectCount(_vkCommandBuffer, _resources->buffers.At(argBuffer).buffer, offset, _resources->buffers.At(countBuffer).buffer, countBufferOffset, maxDrawCount, sizeof(DrawIndexedIndirectCommand));
     }
 
     void CommandList::CopyImage(ImageId srcImage, ImageId dstImage, uint32_t numRegions, ImageCopyRegion* regions) {
