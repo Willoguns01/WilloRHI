@@ -2,6 +2,7 @@
 It's just another Vulkan wrapper, nothing special going on here
 
 Very heavily inspired by https://github.com/Ipotrick/Daxa - namely the bindless interface to shader resource access, etc.
+Okay that's not really even "inspired", I'm using a bunch of descriptor arrays for each resource type in a single descriptor set, making all resource access bindless, as each resource is indexed from shaders with a uint.
 
 I'm mainly doing this to try elevate my knowledge of Vulkan and general graphics programming concepts.
 
